@@ -1,0 +1,372 @@
+Build a production-ready web application called **Social Playout Manager** for deployment on our own Ubuntu servers, not on Replit.
+
+## Goal
+
+This system will let users:
+
+* Upload video files and stream them to YouTube Live continuously like a FAST/live channel
+* Create playlists and schedule playout
+* Add closed captions support
+* Accept inbound **RTMP** and **SRT** live feeds from outside contributors
+* Give users their own ingest endpoints and stream keys
+* Switch between file-based playout and live inputs
+* Restream one source to multiple destinations at the same time, including YouTube and other social platforms
+* Monitor stream health, errors, bitrate, and uptime
+
+## Deployment model
+
+This app is being built in Replit, but it will be deployed on our own infrastructure.
+
+Target environment:
+
+* Ubuntu 22.04 or 24.04
+* Docker Compose for initial deployment
+* PostgreSQL
+* Redis
+* Nginx reverse proxy
+* FFmpeg workers running on our servers
+* SRS or equivalent ingest server for RTMP/WebRTC if needed
+* SRT ingest support
+* Persistent shared storage for uploaded media
+* Systemd or Docker for worker services
+
+Do not assume Replit hosting limitations. Build this as a self-hosted production application.
+
+## Required architecture
+
+Split the system into two major layers:
+
+### 1. Control Plane
+
+Web application for:
+
+* authentication
+* user management
+* channel creation
+* asset upload and library
+* playlist creation
+* scheduling
+* destination management
+* ingest endpoint management
+* monitoring dashboard
+* admin controls
+* logs and audit history
+
+### 2. Media Plane
+
+Worker-based media services for:
+
+* FFmpeg playout
+* RTMP ingest
+* SRT ingest
+* source switching
+* multi-destination output
+* fallback slate
+* captions insertion/passthrough
+* stream health monitoring
+* automatic restart on failure
+
+The control plane must manage the desired state in the database, and workers must pull jobs and report actual state back through APIs.
+
+## Core features
+
+### User/Auth
+
+* User login/logout
+* Admin and standard user roles
+* Organization/multi-tenant support if practical
+* Secure password handling
+* Session management
+
+### Assets
+
+* Upload media assets
+* Store metadata
+* Organize assets by user/channel
+* Show duration, codec info, resolution, audio details if possible
+* Delete/archive assets
+
+### Channels
+
+* Create a channel
+* Assign default playlist
+* Assign live inputs
+* Assign one or more output destinations
+* Start/stop channel
+* Show current source and on-air status
+
+### Playlists
+
+* Build playlists from uploaded assets
+* Reorder playlist items
+* Loop a single file or a playlist indefinitely
+* Optional scheduled playout windows
+* Fallback slate if playlist ends or source is missing
+
+### Live Inputs
+
+Each channel should be able to have one or more live inputs.
+
+Support:
+
+* RTMP ingest
+* SRT ingest
+
+For each live input generate:
+
+* unique name
+* channel assignment
+* stream key/token
+* ingest URL
+* protocol type
+* status
+* last seen time
+* bitrate and resolution if known
+
+Examples:
+
+* RTMP: `rtmp://ingest.yourdomain.com/live/{stream_key}`
+* SRT listener mode with unique port or tokenized mapping
+
+### Destinations
+
+Support multiple output destinations per channel:
+
+* YouTube Live
+* Facebook Live placeholder structure
+* Generic RTMP destination
+* Custom platform destination profile
+
+Each destination should store:
+
+* name
+* platform type
+* stream URL
+* stream key
+* account association if applicable
+* active/inactive state
+
+### YouTube integration
+
+Add support for YouTube Live API:
+
+* Connect YouTube account with OAuth
+* Create live broadcast
+* Create live stream
+* Bind broadcast to stream
+* Start/stop and manage status
+* Store returned IDs and metadata
+* Support reusable stream keys where appropriate
+
+### Captions
+
+Prepare the system for captions with a clean architecture.
+
+Support at minimum:
+
+* caption profile per channel
+* open/burned-in captions option
+* future support for embedded 608/708 passthrough or live caption injection
+
+Do not fully solve every caption workflow yet, but design the schema and worker pipeline so captions can be added cleanly.
+
+### Monitoring
+
+Dashboard should show:
+
+* on-air/off-air state
+* current source
+* current destination statuses
+* worker heartbeat
+* bitrate
+* fps
+* errors
+* reconnect count
+* uptime
+* recent logs
+
+### Logging/Audit
+
+* audit log for user actions
+* stream session history
+* worker event logs
+* error logs
+* API request logging where useful
+
+## Worker architecture
+
+Create a worker service that can:
+
+* fetch assigned jobs from the API
+* start playout jobs
+* stop playout jobs
+* switch source between playlist/live input/fallback
+* publish status back to control plane
+* restart failed FFmpeg processes
+* support multiple destinations per job
+
+The worker should not require manual intervention for normal failures.
+
+## Source modes
+
+Support these operational modes:
+
+### File-to-live
+
+* Loop a file forever to YouTube or other destinations
+* Or play a playlist continuously
+
+### Live-to-live
+
+* Receive RTMP or SRT ingest from a user
+* Transcode/remux if needed
+* Send to one or more destinations
+
+### Hybrid channel
+
+* Default to playlist playout
+* Allow operator to cut to live input
+* Return to playlist when live ends
+
+### Fallback
+
+* If live input fails, switch to slate or fallback asset
+* If playlist is missing, use a default slate
+
+## Backend requirements
+
+Use:
+
+* **FastAPI**
+* SQLAlchemy
+* Alembic
+* PostgreSQL
+* Redis for queueing/caching if useful
+* Pydantic models
+* REST API
+* clean service-oriented structure
+
+## Frontend requirements
+
+Build a clean admin-style UI.
+
+Acceptable options:
+
+* server-rendered templates
+* or React frontend if organized well
+
+Pages required:
+
+* Login
+* Dashboard
+* Assets
+* Upload asset
+* Channels list
+* Channel detail/control page
+* Playlists
+* Playlist detail/editor
+* Live inputs
+* Destinations
+* YouTube account connections
+* Logs/audit
+* Admin settings
+
+## API requirements
+
+Build APIs for:
+
+* auth
+* users
+* assets
+* playlists
+* channels
+* live inputs
+* destinations
+* YouTube integrations
+* worker heartbeat
+* worker job fetch
+* worker status update
+* worker logs/events
+* channel start/stop/switch actions
+
+## Database design
+
+Include models/tables for:
+
+* users
+* roles
+* organizations if used
+* assets
+* asset_files
+* channels
+* playlists
+* playlist_items
+* live_inputs
+* destinations
+* youtube_accounts
+* youtube_broadcasts
+* playout_jobs
+* worker_nodes
+* worker_heartbeats
+* stream_sessions
+* channel_events
+* caption_profiles
+* audit_logs
+
+## FFmpeg / media requirements
+
+Provide example worker command templates for:
+
+1. Looping a file to YouTube Live
+2. Playing a playlist continuously
+3. Receiving RTMP and restreaming to multiple outputs
+4. Receiving SRT and restreaming to multiple outputs
+5. Switching to fallback slate if source fails
+
+Structure the code so command generation is modular and not hardcoded into a single file.
+
+## Deployment deliverables
+
+Generate:
+
+* complete source code
+* Dockerfile(s)
+* docker-compose.yml
+* .env.example
+* Alembic migrations
+* README with setup steps
+* sample Nginx reverse proxy config
+* sample worker configuration
+* initial seed/admin setup instructions
+
+## Code quality requirements
+
+* clean project structure
+* production-oriented configuration
+* secure secret handling
+* no hardcoded credentials
+* modular code
+* clear comments only where useful
+* strong error handling
+* health endpoints
+* ready for future expansion
+
+## Important implementation notes
+
+* This is a self-hosted broadcast-style control platform
+* Do not optimize for Replit hosting
+* Optimize for Ubuntu server deployment
+* Build the control plane first but include the worker service scaffold in the same project or as a clearly separated service
+* Design for future support of SCTE markers, redundant outputs, and caption enhancements
+
+## Final deliverables
+
+At the end, provide:
+
+1. full application code
+2. worker service code
+3. database schema
+4. deployment files
+5. README
+6. example FFmpeg command templates
+7. explanation of how file playout, live ingest, and multi-destination restreaming are handled in the architecture

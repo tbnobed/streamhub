@@ -1,0 +1,36 @@
+FROM node:22-alpine AS base
+WORKDIR /app
+
+RUN apk add --no-cache python3 make g++
+
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY lib/db/package.json ./lib/db/
+COPY lib/api-zod/package.json ./lib/api-zod/
+COPY lib/api-spec/package.json ./lib/api-spec/
+COPY artifacts/api-server/package.json ./artifacts/api-server/
+
+RUN npm install -g pnpm && pnpm install --frozen-lockfile
+
+COPY lib/ ./lib/
+COPY artifacts/api-server/ ./artifacts/api-server/
+COPY tsconfig.base.json tsconfig.json ./
+
+RUN pnpm --filter @workspace/db run build || true
+RUN pnpm --filter @workspace/api-zod run build || true
+RUN pnpm --filter @workspace/api-server run build
+
+FROM node:22-alpine AS production
+WORKDIR /app
+
+RUN apk add --no-cache curl
+
+COPY --from=base /app/node_modules ./node_modules
+COPY --from=base /app/artifacts/api-server/dist ./dist
+COPY --from=base /app/artifacts/api-server/package.json ./
+
+ENV NODE_ENV=production
+ENV PORT=3001
+
+EXPOSE 3001
+
+CMD ["node", "--enable-source-maps", "dist/index.mjs"]

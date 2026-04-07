@@ -1,27 +1,104 @@
-# Workspace
+# Social Playout Manager
 
 ## Overview
+A production-ready broadcast streaming control platform. Includes a React+Vite control plane web app, an Express/PostgreSQL API backend, and a standalone FFmpeg worker service scaffold for Ubuntu/Docker deployment.
 
-pnpm workspace monorepo using TypeScript. Each package manages its own dependencies.
+## Architecture
 
-## Stack
+```
+Port 80 (proxy)
+├── /api  →  API Server (port 8080)
+└── /     →  Frontend React App (port assigned by env)
+```
 
-- **Monorepo tool**: pnpm workspaces
-- **Node.js version**: 24
-- **Package manager**: pnpm
-- **TypeScript version**: 5.9
-- **API framework**: Express 5
-- **Database**: PostgreSQL + Drizzle ORM
-- **Validation**: Zod (`zod/v4`), `drizzle-zod`
-- **API codegen**: Orval (from OpenAPI spec)
-- **Build**: esbuild (CJS bundle)
+### Services
+1. **`artifacts/social-playout`** — React+Vite frontend (dark UI, Tailwind, shadcn/ui)
+2. **`artifacts/api-server`** — Express API + PostgreSQL backend
+3. **`worker/`** — FFmpeg playout worker service (standalone, Docker-ready)
 
-## Key Commands
+## Key Features
+- Channel management (start/stop/switch-source)
+- Asset library (register video/image/audio files)
+- Playlist builder with drag-and-drop ordering
+- Live RTMP/SRT ingest endpoints with stream key generation
+- Multi-destination restreaming (YouTube, Facebook, Twitch, custom RTMP)
+- YouTube Live integration (OAuth + broadcast scheduling)
+- Stream health monitoring (bitrate, FPS, uptime)
+- Worker node management (heartbeat, job polling)
+- Audit logs
 
-- `pnpm run typecheck` — full typecheck across all packages
-- `pnpm run build` — typecheck + build all packages
-- `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from OpenAPI spec
-- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- `pnpm --filter @workspace/api-server run dev` — run API server locally
+## Database
+- PostgreSQL via `lib/db` (Drizzle ORM)
+- Key tables: users, channels, assets, playlists, playlist_items, live_inputs, destinations, youtube_accounts, youtube_broadcasts, worker_nodes, playout_jobs, worker_events, audit_logs, stream_sessions
 
-See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details.
+## Auth
+- Token-based (in-memory Map, Bearer token in localStorage)
+- Password: SHA-256 + SESSION_SECRET env var
+- Default credentials: `admin` / `admin123`, `operator` / `operator123`
+- **Change these immediately on production deployment**
+
+## Pages (Frontend)
+- `/login` — Login page
+- `/dashboard` — Overview stats + channel list
+- `/channels` — Channel management
+- `/channels/:id` — Channel detail + stream control
+- `/assets` — Asset library
+- `/playlists` — Playlist list
+- `/playlists/:id` — Playlist editor (add/remove assets)
+- `/live-inputs` — RTMP/SRT ingest endpoints
+- `/destinations` — Output destinations
+- `/youtube` — YouTube OAuth + broadcast scheduling
+- `/workers` — Worker node status + events
+- `/logs` — Audit log viewer
+
+## API Routes
+All routes under `/api`:
+- `GET /api/healthz` — Health check
+- `POST /api/auth/login` — Login
+- `GET/POST /api/channels` — List/create channels
+- `GET/PATCH/DELETE /api/channels/:id` — Channel CRUD
+- `POST /api/channels/:id/start` — Start channel
+- `POST /api/channels/:id/stop` — Stop channel
+- `POST /api/channels/:id/switch-source` — Hot-switch source
+- `GET/POST /api/assets` — Asset library
+- `GET/POST /api/playlists` — Playlists
+- `GET/POST/DELETE /api/playlists/:id/items` — Playlist items
+- `GET/POST /api/live-inputs` — Live ingest endpoints
+- `GET/POST /api/destinations` — Output destinations
+- `GET /api/youtube/accounts` — YouTube accounts
+- `GET/POST /api/youtube/broadcasts` — Broadcasts
+- `GET /api/workers` — Worker nodes
+- `POST /api/workers/heartbeat` — Worker heartbeat
+- `GET /api/workers/jobs` — Worker job polling
+- `POST /api/workers/jobs/:id/status` — Job status update
+- `GET /api/logs/audit` — Audit logs
+
+## Worker Service
+Located in `worker/`. Runs FFmpeg jobs assigned by the API.
+- Polls API every 5s for jobs
+- Sends heartbeat every 15s
+- Auto-restarts failed FFmpeg processes (up to 5 times)
+- Supports: playlist loop, live RTMP/SRT ingest, fallback slate
+
+## Deployment (Docker)
+- `docker-compose.yml` — Full stack: postgres, redis, api, web, worker, nginx
+- `Dockerfile.api` — API server container
+- `Dockerfile.web` — Frontend container (Nginx)
+- `worker/Dockerfile` — Worker container (FFmpeg + Node.js)
+- `nginx.conf` — Reverse proxy config
+- `.env.example` — Environment variable template
+
+## Environment Variables
+- `DATABASE_URL` — PostgreSQL connection string
+- `SESSION_SECRET` — Password hashing secret (required)
+- `INGEST_HOST` — Hostname for RTMP/SRT ingest URL generation
+- `YOUTUBE_CLIENT_ID`, `YOUTUBE_CLIENT_SECRET`, `YOUTUBE_REDIRECT_URI` — YouTube OAuth
+- `PORT` — API server port (8080 in dev)
+- `WORKER_ID` — Unique worker identifier
+- `API_URL` — Worker → API URL
+
+## Tech Stack
+- **Frontend**: React 18, Vite, Tailwind CSS, shadcn/ui (Radix UI), TanStack Query, Wouter, Lucide
+- **Backend**: Node.js, Express, Drizzle ORM, PostgreSQL, Zod, Pino
+- **Worker**: Node.js, FFmpeg (subprocess), TypeScript
+- **Dev**: pnpm workspaces, TypeScript, ESBuild

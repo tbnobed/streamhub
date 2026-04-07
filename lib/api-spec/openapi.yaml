@@ -3,20 +3,42 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Social Playout Manager API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: auth
+    description: Authentication
+  - name: users
+    description: User management
+  - name: assets
+    description: Media asset library
+  - name: channels
+    description: Broadcast channels
+  - name: playlists
+    description: Playlist management
+  - name: liveInputs
+    description: Live RTMP/SRT ingest inputs
+  - name: destinations
+    description: Output destinations
+  - name: youtube
+    description: YouTube Live integration
+  - name: workers
+    description: Worker node management
+  - name: monitoring
+    description: Stream monitoring and stats
+  - name: logs
+    description: Audit and event logs
+
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +46,1103 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  # AUTH
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Login with username/password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginBody"
+      responses:
+        "200":
+          description: Login success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      summary: Logout current session
+      responses:
+        "200":
+          description: Logged out
+
+  /auth/me:
+    get:
+      operationId: getMe
+      tags: [auth]
+      summary: Get current user
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          description: Not authenticated
+
+  # USERS
+  /users:
+    get:
+      operationId: listUsers
+      tags: [users]
+      summary: List all users (admin)
+      responses:
+        "200":
+          description: List of users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/User"
+    post:
+      operationId: createUser
+      tags: [users]
+      summary: Create a new user (admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateUserBody"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+  /users/{id}:
+    get:
+      operationId: getUser
+      tags: [users]
+      summary: Get user by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: User
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "404":
+          description: Not found
+
+    patch:
+      operationId: updateUser
+      tags: [users]
+      summary: Update user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUserBody"
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+    delete:
+      operationId: deleteUser
+      tags: [users]
+      summary: Delete user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # ASSETS
+  /assets:
+    get:
+      operationId: listAssets
+      tags: [assets]
+      summary: List media assets
+      parameters:
+        - name: channelId
+          in: query
+          schema:
+            type: ["integer", "null"]
+      responses:
+        "200":
+          description: List of assets
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Asset"
+    post:
+      operationId: createAsset
+      tags: [assets]
+      summary: Create asset record (after upload)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAssetBody"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Asset"
+
+  /assets/{id}:
+    get:
+      operationId: getAsset
+      tags: [assets]
+      summary: Get asset by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Asset
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Asset"
+        "404":
+          description: Not found
+
+    patch:
+      operationId: updateAsset
+      tags: [assets]
+      summary: Update asset metadata
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateAssetBody"
+      responses:
+        "200":
+          description: Updated asset
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Asset"
+
+    delete:
+      operationId: deleteAsset
+      tags: [assets]
+      summary: Delete asset
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /assets/stats:
+    get:
+      operationId: getAssetStats
+      tags: [assets]
+      summary: Asset library stats (count, total size, formats)
+      responses:
+        "200":
+          description: Asset stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AssetStats"
+
+  # CHANNELS
+  /channels:
+    get:
+      operationId: listChannels
+      tags: [channels]
+      summary: List all channels
+      responses:
+        "200":
+          description: Channels
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Channel"
+    post:
+      operationId: createChannel
+      tags: [channels]
+      summary: Create a new channel
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateChannelBody"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Channel"
+
+  /channels/{id}:
+    get:
+      operationId: getChannel
+      tags: [channels]
+      summary: Get channel detail
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Channel
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChannelDetail"
+        "404":
+          description: Not found
+
+    patch:
+      operationId: updateChannel
+      tags: [channels]
+      summary: Update channel settings
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateChannelBody"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Channel"
+
+    delete:
+      operationId: deleteChannel
+      tags: [channels]
+      summary: Delete channel
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /channels/{id}/start:
+    post:
+      operationId: startChannel
+      tags: [channels]
+      summary: Start channel broadcast
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Channel started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Channel"
+
+  /channels/{id}/stop:
+    post:
+      operationId: stopChannel
+      tags: [channels]
+      summary: Stop channel broadcast
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Channel stopped
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Channel"
+
+  /channels/{id}/switch-source:
+    post:
+      operationId: switchChannelSource
+      tags: [channels]
+      summary: Switch between playlist/live input/fallback
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SwitchSourceBody"
+      responses:
+        "200":
+          description: Source switched
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Channel"
+
+  /channels/summary:
+    get:
+      operationId: getChannelsSummary
+      tags: [channels]
+      summary: Dashboard summary (on-air count, total destinations, active workers)
+      responses:
+        "200":
+          description: Summary stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChannelsSummary"
+
+  # PLAYLISTS
+  /playlists:
+    get:
+      operationId: listPlaylists
+      tags: [playlists]
+      summary: List playlists
+      parameters:
+        - name: channelId
+          in: query
+          schema:
+            type: ["integer", "null"]
+      responses:
+        "200":
+          description: Playlists
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Playlist"
+    post:
+      operationId: createPlaylist
+      tags: [playlists]
+      summary: Create playlist
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePlaylistBody"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Playlist"
+
+  /playlists/{id}:
+    get:
+      operationId: getPlaylist
+      tags: [playlists]
+      summary: Get playlist with items
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Playlist detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlaylistDetail"
+        "404":
+          description: Not found
+
+    patch:
+      operationId: updatePlaylist
+      tags: [playlists]
+      summary: Update playlist
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePlaylistBody"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Playlist"
+
+    delete:
+      operationId: deletePlaylist
+      tags: [playlists]
+      summary: Delete playlist
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /playlists/{id}/items:
+    get:
+      operationId: listPlaylistItems
+      tags: [playlists]
+      summary: List items in playlist
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Playlist items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PlaylistItem"
+
+    post:
+      operationId: addPlaylistItem
+      tags: [playlists]
+      summary: Add item to playlist
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddPlaylistItemBody"
+      responses:
+        "201":
+          description: Added
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlaylistItem"
+
+  /playlists/{id}/items/{itemId}:
+    delete:
+      operationId: removePlaylistItem
+      tags: [playlists]
+      summary: Remove item from playlist
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: itemId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Removed
+
+  /playlists/{id}/reorder:
+    post:
+      operationId: reorderPlaylistItems
+      tags: [playlists]
+      summary: Reorder playlist items
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReorderPlaylistBody"
+      responses:
+        "200":
+          description: Reordered
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PlaylistItem"
+
+  # LIVE INPUTS
+  /live-inputs:
+    get:
+      operationId: listLiveInputs
+      tags: [liveInputs]
+      summary: List live ingest inputs
+      parameters:
+        - name: channelId
+          in: query
+          schema:
+            type: ["integer", "null"]
+      responses:
+        "200":
+          description: Live inputs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LiveInput"
+    post:
+      operationId: createLiveInput
+      tags: [liveInputs]
+      summary: Create live input (generates stream key)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateLiveInputBody"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LiveInput"
+
+  /live-inputs/{id}:
+    get:
+      operationId: getLiveInput
+      tags: [liveInputs]
+      summary: Get live input detail
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Live input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LiveInput"
+
+    patch:
+      operationId: updateLiveInput
+      tags: [liveInputs]
+      summary: Update live input
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateLiveInputBody"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LiveInput"
+
+    delete:
+      operationId: deleteLiveInput
+      tags: [liveInputs]
+      summary: Delete live input
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /live-inputs/{id}/regenerate-key:
+    post:
+      operationId: regenerateLiveInputKey
+      tags: [liveInputs]
+      summary: Regenerate stream key for live input
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: New key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LiveInput"
+
+  # DESTINATIONS
+  /destinations:
+    get:
+      operationId: listDestinations
+      tags: [destinations]
+      summary: List output destinations
+      parameters:
+        - name: channelId
+          in: query
+          schema:
+            type: ["integer", "null"]
+      responses:
+        "200":
+          description: Destinations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Destination"
+    post:
+      operationId: createDestination
+      tags: [destinations]
+      summary: Create destination
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateDestinationBody"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Destination"
+
+  /destinations/{id}:
+    get:
+      operationId: getDestination
+      tags: [destinations]
+      summary: Get destination
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Destination
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Destination"
+
+    patch:
+      operationId: updateDestination
+      tags: [destinations]
+      summary: Update destination
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateDestinationBody"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Destination"
+
+    delete:
+      operationId: deleteDestination
+      tags: [destinations]
+      summary: Delete destination
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /destinations/{id}/toggle:
+    post:
+      operationId: toggleDestination
+      tags: [destinations]
+      summary: Enable or disable a destination
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Toggled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Destination"
+
+  # YOUTUBE
+  /youtube/accounts:
+    get:
+      operationId: listYoutubeAccounts
+      tags: [youtube]
+      summary: List connected YouTube accounts
+      responses:
+        "200":
+          description: Accounts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/YoutubeAccount"
+
+  /youtube/accounts/{id}:
+    delete:
+      operationId: deleteYoutubeAccount
+      tags: [youtube]
+      summary: Disconnect YouTube account
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /youtube/auth-url:
+    get:
+      operationId: getYoutubeAuthUrl
+      tags: [youtube]
+      summary: Get YouTube OAuth URL for connecting account
+      responses:
+        "200":
+          description: Auth URL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/YoutubeAuthUrl"
+
+  /youtube/broadcasts:
+    get:
+      operationId: listYoutubeBroadcasts
+      tags: [youtube]
+      summary: List YouTube broadcasts
+      parameters:
+        - name: channelId
+          in: query
+          schema:
+            type: ["integer", "null"]
+      responses:
+        "200":
+          description: Broadcasts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/YoutubeBroadcast"
+
+    post:
+      operationId: createYoutubeBroadcast
+      tags: [youtube]
+      summary: Create YouTube Live broadcast
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateYoutubeBroadcastBody"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/YoutubeBroadcast"
+
+  # WORKERS
+  /workers:
+    get:
+      operationId: listWorkers
+      tags: [workers]
+      summary: List worker nodes
+      responses:
+        "200":
+          description: Workers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/WorkerNode"
+
+  /workers/heartbeat:
+    post:
+      operationId: workerHeartbeat
+      tags: [workers]
+      summary: Worker sends heartbeat
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WorkerHeartbeatBody"
+      responses:
+        "200":
+          description: OK
+
+  /workers/jobs:
+    get:
+      operationId: fetchWorkerJobs
+      tags: [workers]
+      summary: Worker fetches assigned jobs
+      parameters:
+        - name: workerId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Jobs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PlayoutJob"
+
+  /workers/jobs/{id}/status:
+    post:
+      operationId: updateJobStatus
+      tags: [workers]
+      summary: Worker updates job status/metrics
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateJobStatusBody"
+      responses:
+        "200":
+          description: Updated
+
+  /workers/events:
+    post:
+      operationId: submitWorkerEvent
+      tags: [workers]
+      summary: Worker submits an event log
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WorkerEventBody"
+      responses:
+        "201":
+          description: Submitted
+
+  # MONITORING
+  /monitoring/stream-health:
+    get:
+      operationId: getStreamHealth
+      tags: [monitoring]
+      summary: Live stream health metrics for all active channels
+      responses:
+        "200":
+          description: Stream health
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StreamHealth"
+
+  /monitoring/sessions:
+    get:
+      operationId: listStreamSessions
+      tags: [monitoring]
+      summary: List stream sessions history
+      parameters:
+        - name: channelId
+          in: query
+          schema:
+            type: ["integer", "null"]
+        - name: limit
+          in: query
+          schema:
+            type: ["integer", "null"]
+      responses:
+        "200":
+          description: Sessions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StreamSession"
+
+  # LOGS
+  /logs/audit:
+    get:
+      operationId: listAuditLogs
+      tags: [logs]
+      summary: List audit log entries
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: ["integer", "null"]
+        - name: userId
+          in: query
+          schema:
+            type: ["integer", "null"]
+      responses:
+        "200":
+          description: Audit logs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AuditLog"
+
+  /logs/worker-events:
+    get:
+      operationId: listWorkerEvents
+      tags: [logs]
+      summary: List worker event logs
+      parameters:
+        - name: channelId
+          in: query
+          schema:
+            type: ["integer", "null"]
+        - name: limit
+          in: query
+          schema:
+            type: ["integer", "null"]
+      responses:
+        "200":
+          description: Worker events
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/WorkerEvent"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +1153,899 @@ components:
       required:
         - status
 
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+
+    # AUTH
+    LoginBody:
+      type: object
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+      required:
+        - username
+        - password
+
+    AuthResponse:
+      type: object
+      properties:
+        user:
+          $ref: "#/components/schemas/User"
+        token:
+          type: string
+      required:
+        - user
+        - token
+
+    # USER
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+        username:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+          enum: [admin, operator, viewer]
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - username
+        - email
+        - role
+        - isActive
+        - createdAt
+
+    CreateUserBody:
+      type: object
+      properties:
+        username:
+          type: string
+        email:
+          type: string
+        password:
+          type: string
+        role:
+          type: string
+          enum: [admin, operator, viewer]
+      required:
+        - username
+        - email
+        - password
+        - role
+
+    UpdateUserBody:
+      type: object
+      properties:
+        email:
+          type: ["string", "null"]
+        role:
+          type: ["string", "null"]
+        isActive:
+          type: ["boolean", "null"]
+
+    # ASSET
+    Asset:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        filename:
+          type: string
+        filePath:
+          type: string
+        fileSize:
+          type: ["integer", "null"]
+        mimeType:
+          type: ["string", "null"]
+        duration:
+          type: ["number", "null"]
+        width:
+          type: ["integer", "null"]
+        height:
+          type: ["integer", "null"]
+        codec:
+          type: ["string", "null"]
+        audioCodec:
+          type: ["string", "null"]
+        bitrate:
+          type: ["integer", "null"]
+        status:
+          type: string
+          enum: [pending, ready, error, archived]
+        userId:
+          type: ["integer", "null"]
+        channelId:
+          type: ["integer", "null"]
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - filename
+        - filePath
+        - status
+        - createdAt
+
+    CreateAssetBody:
+      type: object
+      properties:
+        name:
+          type: string
+        filename:
+          type: string
+        filePath:
+          type: string
+        fileSize:
+          type: ["integer", "null"]
+        mimeType:
+          type: ["string", "null"]
+        duration:
+          type: ["number", "null"]
+        width:
+          type: ["integer", "null"]
+        height:
+          type: ["integer", "null"]
+        codec:
+          type: ["string", "null"]
+        audioCodec:
+          type: ["string", "null"]
+        bitrate:
+          type: ["integer", "null"]
+        channelId:
+          type: ["integer", "null"]
+      required:
+        - name
+        - filename
+        - filePath
+
+    UpdateAssetBody:
+      type: object
+      properties:
+        name:
+          type: ["string", "null"]
+        status:
+          type: ["string", "null"]
+        channelId:
+          type: ["integer", "null"]
+
+    AssetStats:
+      type: object
+      properties:
+        total:
+          type: integer
+        totalSizeBytes:
+          type: integer
+        byStatus:
+          type: object
+          additionalProperties:
+            type: integer
+        byFormat:
+          type: object
+          additionalProperties:
+            type: integer
+      required:
+        - total
+        - totalSizeBytes
+        - byStatus
+        - byFormat
+
+    # CHANNEL
+    Channel:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [idle, starting, on_air, stopping, error]
+        sourceMode:
+          type: string
+          enum: [playlist, live_input, fallback]
+        activePlaylistId:
+          type: ["integer", "null"]
+        activeLiveInputId:
+          type: ["integer", "null"]
+        fallbackAssetId:
+          type: ["integer", "null"]
+        loopPlaylist:
+          type: boolean
+        userId:
+          type: ["integer", "null"]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - status
+        - sourceMode
+        - loopPlaylist
+        - createdAt
+        - updatedAt
+
+    ChannelDetail:
+      allOf:
+        - $ref: "#/components/schemas/Channel"
+        - type: object
+          properties:
+            playlist:
+              $ref: "#/components/schemas/Playlist"
+            liveInput:
+              $ref: "#/components/schemas/LiveInput"
+            destinations:
+              type: array
+              items:
+                $ref: "#/components/schemas/Destination"
+            streamHealth:
+              $ref: "#/components/schemas/StreamHealth"
+
+    CreateChannelBody:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+        activePlaylistId:
+          type: ["integer", "null"]
+        fallbackAssetId:
+          type: ["integer", "null"]
+        loopPlaylist:
+          type: boolean
+      required:
+        - name
+
+    UpdateChannelBody:
+      type: object
+      properties:
+        name:
+          type: ["string", "null"]
+        description:
+          type: ["string", "null"]
+        activePlaylistId:
+          type: ["integer", "null"]
+        activeLiveInputId:
+          type: ["integer", "null"]
+        fallbackAssetId:
+          type: ["integer", "null"]
+        loopPlaylist:
+          type: ["boolean", "null"]
+
+    SwitchSourceBody:
+      type: object
+      properties:
+        sourceMode:
+          type: string
+          enum: [playlist, live_input, fallback]
+        liveInputId:
+          type: ["integer", "null"]
+        playlistId:
+          type: ["integer", "null"]
+      required:
+        - sourceMode
+
+    ChannelsSummary:
+      type: object
+      properties:
+        totalChannels:
+          type: integer
+        onAirCount:
+          type: integer
+        idleCount:
+          type: integer
+        errorCount:
+          type: integer
+        totalDestinations:
+          type: integer
+        activeWorkers:
+          type: integer
+        totalAssets:
+          type: integer
+      required:
+        - totalChannels
+        - onAirCount
+        - idleCount
+        - errorCount
+        - totalDestinations
+        - activeWorkers
+        - totalAssets
+
+    # PLAYLIST
+    Playlist:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+        channelId:
+          type: ["integer", "null"]
+        loop:
+          type: boolean
+        itemCount:
+          type: integer
+        totalDuration:
+          type: ["number", "null"]
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - loop
+        - itemCount
+        - createdAt
+
+    PlaylistDetail:
+      allOf:
+        - $ref: "#/components/schemas/Playlist"
+        - type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/PlaylistItem"
+
+    CreatePlaylistBody:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+        channelId:
+          type: ["integer", "null"]
+        loop:
+          type: boolean
+      required:
+        - name
+
+    UpdatePlaylistBody:
+      type: object
+      properties:
+        name:
+          type: ["string", "null"]
+        description:
+          type: ["string", "null"]
+        loop:
+          type: ["boolean", "null"]
+
+    PlaylistItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        playlistId:
+          type: integer
+        assetId:
+          type: integer
+        position:
+          type: integer
+        assetName:
+          type: ["string", "null"]
+        assetDuration:
+          type: ["number", "null"]
+        assetFilePath:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - playlistId
+        - assetId
+        - position
+        - createdAt
+
+    AddPlaylistItemBody:
+      type: object
+      properties:
+        assetId:
+          type: integer
+        position:
+          type: ["integer", "null"]
+      required:
+        - assetId
+
+    ReorderPlaylistBody:
+      type: object
+      properties:
+        itemIds:
+          type: array
+          items:
+            type: integer
+      required:
+        - itemIds
+
+    # LIVE INPUT
+    LiveInput:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        channelId:
+          type: ["integer", "null"]
+        protocol:
+          type: string
+          enum: [rtmp, srt]
+        streamKey:
+          type: string
+        ingestUrl:
+          type: string
+        status:
+          type: string
+          enum: [idle, connected, error]
+        lastSeenAt:
+          type: ["string", "null"]
+          format: date-time
+        currentBitrate:
+          type: ["integer", "null"]
+        currentResolution:
+          type: ["string", "null"]
+        reconnectCount:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - protocol
+        - streamKey
+        - ingestUrl
+        - status
+        - reconnectCount
+        - createdAt
+
+    CreateLiveInputBody:
+      type: object
+      properties:
+        name:
+          type: string
+        channelId:
+          type: ["integer", "null"]
+        protocol:
+          type: string
+          enum: [rtmp, srt]
+      required:
+        - name
+        - protocol
+
+    UpdateLiveInputBody:
+      type: object
+      properties:
+        name:
+          type: ["string", "null"]
+        channelId:
+          type: ["integer", "null"]
+
+    # DESTINATION
+    Destination:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        channelId:
+          type: ["integer", "null"]
+        platform:
+          type: string
+          enum: [youtube, facebook, rtmp, custom]
+        streamUrl:
+          type: string
+        streamKey:
+          type: string
+        isActive:
+          type: boolean
+        youtubeAccountId:
+          type: ["integer", "null"]
+        youtubeBroadcastId:
+          type: ["integer", "null"]
+        status:
+          type: string
+          enum: [idle, streaming, error, disconnected]
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - platform
+        - streamUrl
+        - streamKey
+        - isActive
+        - status
+        - createdAt
+
+    CreateDestinationBody:
+      type: object
+      properties:
+        name:
+          type: string
+        channelId:
+          type: ["integer", "null"]
+        platform:
+          type: string
+          enum: [youtube, facebook, rtmp, custom]
+        streamUrl:
+          type: string
+        streamKey:
+          type: string
+        youtubeAccountId:
+          type: ["integer", "null"]
+        youtubeBroadcastId:
+          type: ["integer", "null"]
+      required:
+        - name
+        - platform
+        - streamUrl
+        - streamKey
+
+    UpdateDestinationBody:
+      type: object
+      properties:
+        name:
+          type: ["string", "null"]
+        streamUrl:
+          type: ["string", "null"]
+        streamKey:
+          type: ["string", "null"]
+        isActive:
+          type: ["boolean", "null"]
+
+    # YOUTUBE
+    YoutubeAccount:
+      type: object
+      properties:
+        id:
+          type: integer
+        channelTitle:
+          type: string
+        channelId:
+          type: string
+        email:
+          type: ["string", "null"]
+        userId:
+          type: ["integer", "null"]
+        connectedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - channelTitle
+        - channelId
+        - connectedAt
+
+    YoutubeAuthUrl:
+      type: object
+      properties:
+        url:
+          type: string
+      required:
+        - url
+
+    YoutubeBroadcast:
+      type: object
+      properties:
+        id:
+          type: integer
+        ytBroadcastId:
+          type: string
+        ytStreamId:
+          type: string
+        title:
+          type: string
+        status:
+          type: string
+        channelId:
+          type: ["integer", "null"]
+        youtubeAccountId:
+          type: integer
+        scheduledStart:
+          type: ["string", "null"]
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - ytBroadcastId
+        - ytStreamId
+        - title
+        - status
+        - youtubeAccountId
+        - createdAt
+
+    CreateYoutubeBroadcastBody:
+      type: object
+      properties:
+        title:
+          type: string
+        channelId:
+          type: ["integer", "null"]
+        youtubeAccountId:
+          type: integer
+        scheduledStart:
+          type: ["string", "null"]
+      required:
+        - title
+        - youtubeAccountId
+
+    # WORKERS
+    WorkerNode:
+      type: object
+      properties:
+        id:
+          type: integer
+        workerId:
+          type: string
+        hostname:
+          type: string
+        status:
+          type: string
+          enum: [online, offline, busy]
+        activeJobs:
+          type: integer
+        lastHeartbeatAt:
+          type: ["string", "null"]
+          format: date-time
+        version:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - workerId
+        - hostname
+        - status
+        - activeJobs
+        - createdAt
+
+    WorkerHeartbeatBody:
+      type: object
+      properties:
+        workerId:
+          type: string
+        hostname:
+          type: string
+        activeJobs:
+          type: integer
+        version:
+          type: ["string", "null"]
+      required:
+        - workerId
+        - hostname
+        - activeJobs
+
+    PlayoutJob:
+      type: object
+      properties:
+        id:
+          type: integer
+        channelId:
+          type: integer
+        workerId:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [pending, running, stopped, failed, completed]
+        sourceMode:
+          type: string
+        sourceRef:
+          type: ["string", "null"]
+        destinations:
+          type: array
+          items:
+            type: object
+        ffmpegCommand:
+          type: ["string", "null"]
+        pid:
+          type: ["integer", "null"]
+        startedAt:
+          type: ["string", "null"]
+          format: date-time
+        stoppedAt:
+          type: ["string", "null"]
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - channelId
+        - status
+        - sourceMode
+        - destinations
+        - createdAt
+
+    UpdateJobStatusBody:
+      type: object
+      properties:
+        status:
+          type: string
+        bitrate:
+          type: ["integer", "null"]
+        fps:
+          type: ["number", "null"]
+        pid:
+          type: ["integer", "null"]
+        errorMessage:
+          type: ["string", "null"]
+      required:
+        - status
+
+    WorkerEventBody:
+      type: object
+      properties:
+        workerId:
+          type: string
+        channelId:
+          type: ["integer", "null"]
+        jobId:
+          type: ["integer", "null"]
+        eventType:
+          type: string
+          enum: [job_started, job_stopped, job_failed, source_switched, reconnect, error, info]
+        message:
+          type: string
+        metadata:
+          type: ["object", "null"]
+      required:
+        - workerId
+        - eventType
+        - message
+
+    # MONITORING
+    StreamHealth:
+      type: object
+      properties:
+        channelId:
+          type: integer
+        channelName:
+          type: string
+        status:
+          type: string
+        sourceMode:
+          type: string
+        bitrate:
+          type: ["integer", "null"]
+        fps:
+          type: ["number", "null"]
+        uptime:
+          type: ["integer", "null"]
+        reconnectCount:
+          type: integer
+        errorCount:
+          type: integer
+        lastError:
+          type: ["string", "null"]
+        destinationStatuses:
+          type: array
+          items:
+            type: object
+        workerHeartbeat:
+          type: ["string", "null"]
+          format: date-time
+      required:
+        - channelId
+        - channelName
+        - status
+        - sourceMode
+        - reconnectCount
+        - errorCount
+        - destinationStatuses
+
+    StreamSession:
+      type: object
+      properties:
+        id:
+          type: integer
+        channelId:
+          type: integer
+        channelName:
+          type: ["string", "null"]
+        startedAt:
+          type: string
+          format: date-time
+        endedAt:
+          type: ["string", "null"]
+          format: date-time
+        durationSeconds:
+          type: ["integer", "null"]
+        peakBitrate:
+          type: ["integer", "null"]
+        errorCount:
+          type: integer
+        sourceMode:
+          type: string
+      required:
+        - id
+        - channelId
+        - startedAt
+        - errorCount
+        - sourceMode
+
+    # LOGS
+    AuditLog:
+      type: object
+      properties:
+        id:
+          type: integer
+        userId:
+          type: ["integer", "null"]
+        username:
+          type: ["string", "null"]
+        action:
+          type: string
+        resourceType:
+          type: string
+        resourceId:
+          type: ["integer", "null"]
+        details:
+          type: ["object", "null"]
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - action
+        - resourceType
+        - createdAt
+
+    WorkerEvent:
+      type: object
+      properties:
+        id:
+          type: integer
+        workerId:
+          type: string
+        channelId:
+          type: ["integer", "null"]
+        jobId:
+          type: ["integer", "null"]
+        eventType:
+          type: string
+        message:
+          type: string
+        metadata:
+          type: ["object", "null"]
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - workerId
+        - eventType
+        - message
+        - createdAt

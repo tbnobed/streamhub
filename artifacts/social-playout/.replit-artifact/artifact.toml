@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "Social Playout Manager"
+version = "1.0.0"
+id = "artifacts/social-playout"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 19314
+
+[services.development]
+run = "pnpm --filter @workspace/social-playout run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/social-playout", "run", "build" ]
+publicDir = "artifacts/social-playout/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "19314"
+BASE_PATH = "/"
