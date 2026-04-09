@@ -7,8 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Play, Square, ChevronLeft, RefreshCw, Activity, Tv2, Radio } from "lucide-react";
-import { useState } from "react";
+import { Play, Square, ChevronLeft, RefreshCw, Activity, Tv2, Radio, Copy, Check, Eye, EyeOff } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
 import { apiBase } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 
@@ -26,11 +26,15 @@ interface Channel {
   status: string;
   sourceMode: string;
   sourceName?: string;
+  activePlaylistId?: number;
+  activeLiveInputId?: number;
   activeJobId?: number;
   bitrate?: number;
   fps?: number;
   uptimeSeconds?: number;
   workerNodeId?: string;
+  playlist?: { id: number; name: string };
+  liveInput?: { id: number; name: string; protocol: string; streamKey: string; ingestUrl: string; status: string };
   destinations?: Array<{ id: number; name: string; platform: string; streamUrl: string }>;
 }
 
@@ -74,6 +78,145 @@ function formatUptime(secs: number): string {
   const m = Math.floor((secs % 3600) / 60);
   const s = secs % 60;
   return [h && `${h}h`, m && `${m}m`, `${s}s`].filter(Boolean).join(" ");
+}
+
+interface PreviewUrls {
+  flv: string;
+  hls: string;
+  whep: string;
+}
+
+function LivePreviewCard({ streamKey, inputName }: { streamKey: string; inputName: string }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const hlsRef = useRef<any>(null);
+  const [showPreview, setShowPreview] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+
+  const { data: previewUrls } = useQuery<PreviewUrls>({
+    queryKey: ["srs-preview", streamKey],
+    queryFn: () => apiFetch(`/srs/preview-url/${streamKey}`),
+    enabled: !!streamKey,
+  });
+
+  useEffect(() => {
+    if (!showPreview || !previewUrls || !videoRef.current) return;
+
+    let hls: any = null;
+    setPreviewError(null);
+
+    const initPlayer = async () => {
+      const Hls = (await import("hls.js")).default;
+
+      if (Hls.isSupported()) {
+        hls = new Hls({
+          enableWorker: true,
+          lowLatencyMode: true,
+          liveSyncDurationCount: 3,
+          liveMaxLatencyDurationCount: 6,
+          liveDurationInfinity: true,
+          manifestLoadingTimeOut: 10000,
+          manifestLoadingMaxRetry: 3,
+        });
+
+        hls.loadSource(previewUrls.hls);
+        hls.attachMedia(videoRef.current!);
+        hls.on(Hls.Events.ERROR, (_e: any, data: any) => {
+          if (data.fatal) {
+            setPreviewError("Stream not available. Make sure a stream is publishing to this input.");
+            hls.destroy();
+          }
+        });
+        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+          videoRef.current?.play().catch(() => {});
+        });
+        hlsRef.current = hls;
+      } else if (videoRef.current!.canPlayType("application/vnd.apple.mpegurl")) {
+        videoRef.current!.src = previewUrls.hls;
+        videoRef.current!.addEventListener("loadedmetadata", () => {
+          videoRef.current?.play().catch(() => {});
+        });
+      } else {
+        setPreviewError("HLS playback is not supported in this browser.");
+      }
+    };
+
+    initPlayer();
+
+    return () => {
+      if (hlsRef.current) {
+        hlsRef.current.destroy();
+        hlsRef.current = null;
+      }
+    };
+  }, [showPreview, previewUrls]);
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <CardTitle className="text-base flex items-center gap-2">
+          <Eye className="w-4 h-4" />
+          Live Preview
+        </CardTitle>
+        <Button
+          size="sm"
+          variant={showPreview ? "destructive" : "default"}
+          onClick={() => {
+            setShowPreview(!showPreview);
+            setPreviewError(null);
+          }}
+        >
+          {showPreview ? (
+            <><EyeOff className="w-3.5 h-3.5 mr-2" />Stop Preview</>
+          ) : (
+            <><Eye className="w-3.5 h-3.5 mr-2" />Start Preview</>
+          )}
+        </Button>
+      </CardHeader>
+      <CardContent>
+        {!showPreview && (
+          <div className="aspect-video bg-muted/30 rounded-lg flex flex-col items-center justify-center gap-2">
+            <Tv2 className="w-10 h-10 text-muted-foreground/20" />
+            <p className="text-sm text-muted-foreground">Click "Start Preview" to watch <span className="font-medium">{inputName}</span></p>
+            <p className="text-xs text-muted-foreground">Preview uses HLS — expect 5-10 seconds latency</p>
+          </div>
+        )}
+        {showPreview && previewError && (
+          <div className="aspect-video bg-muted/30 rounded-lg flex flex-col items-center justify-center gap-2">
+            <EyeOff className="w-10 h-10 text-muted-foreground/20" />
+            <p className="text-sm text-muted-foreground">{previewError}</p>
+          </div>
+        )}
+        {showPreview && !previewError && (
+          <div className="aspect-video bg-black rounded-lg overflow-hidden">
+            <video
+              ref={videoRef}
+              className="w-full h-full"
+              muted
+              autoPlay
+              playsInline
+              controls
+            />
+          </div>
+        )}
+        {previewUrls && (
+          <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+            <div className="bg-muted rounded p-2">
+              <span className="text-muted-foreground">HLS</span>
+              <code className="block truncate mt-0.5">{previewUrls.hls}</code>
+            </div>
+            <div className="bg-muted rounded p-2">
+              <span className="text-muted-foreground">HTTP-FLV</span>
+              <code className="block truncate mt-0.5">{previewUrls.flv}</code>
+            </div>
+            <div className="bg-muted rounded p-2">
+              <span className="text-muted-foreground">WebRTC (WHEP)</span>
+              <code className="block truncate mt-0.5">{previewUrls.whep}</code>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
 }
 
 export default function ChannelDetailPage() {
@@ -230,13 +373,46 @@ export default function ChannelDetailPage() {
               <div className="space-y-1">
                 <Label className="text-xs text-muted-foreground">Current Mode</Label>
                 <p className="text-sm font-medium capitalize">{channel.sourceMode.replace("_", " ")}</p>
-                {channel.sourceName && (
-                  <p className="text-xs text-muted-foreground">{channel.sourceName}</p>
-                )}
               </div>
 
+              {channel.sourceMode === "playlist" && channel.playlist && (
+                <div className="rounded-md bg-accent/30 p-3 space-y-1">
+                  <div className="text-xs text-muted-foreground">Active Playlist</div>
+                  <div className="font-medium text-sm">{channel.playlist.name}</div>
+                </div>
+              )}
+
+              {channel.sourceMode === "live_input" && channel.liveInput && (
+                <div className="rounded-md bg-accent/30 p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-xs text-muted-foreground">Active Live Input</div>
+                      <div className="font-medium text-sm flex items-center gap-2">
+                        <Radio className="w-3.5 h-3.5 text-primary" />
+                        {channel.liveInput.name}
+                        <Badge variant="outline" className="text-[10px] uppercase">{channel.liveInput.protocol}</Badge>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-xs text-muted-foreground">Ingest URL</div>
+                  <code className="text-[11px] bg-muted rounded px-1.5 py-0.5 block truncate">{channel.liveInput.ingestUrl}</code>
+                </div>
+              )}
+
+              {channel.sourceMode === "live_input" && !channel.liveInput && (
+                <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3">
+                  <p className="text-xs text-destructive">No live input selected. Choose one below.</p>
+                </div>
+              )}
+
+              {channel.sourceMode === "fallback" && (
+                <div className="rounded-md bg-accent/30 p-3">
+                  <div className="text-xs text-muted-foreground">Broadcasting fallback slate</div>
+                </div>
+              )}
+
               <div className="border-t border-border pt-4 space-y-3">
-                <Label className="text-xs">Source Mode</Label>
+                <Label className="text-xs font-medium">Switch Source</Label>
                 <Select
                   value={activeSourceMode}
                   onValueChange={(v) => {
@@ -311,6 +487,11 @@ export default function ChannelDetailPage() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Live Preview */}
+        {channel.sourceMode === "live_input" && channel.liveInput && (
+          <LivePreviewCard streamKey={channel.liveInput.streamKey} inputName={channel.liveInput.name} />
+        )}
 
         {/* Destinations */}
         {channel.destinations && channel.destinations.length > 0 && (

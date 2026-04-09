@@ -74,4 +74,15 @@ router.get("/srs/input-status", async (_req, res): Promise<void> => {
   }
 });
 
+router.get("/srs/preview-url/:streamKey", async (req, res): Promise<void> => {
+  const streamKey = req.params.streamKey;
+  const ingestHost = process.env.INGEST_HOST ?? "localhost";
+
+  res.json({
+    flv: `https://${ingestHost}/live/${streamKey}.flv`,
+    hls: `https://${ingestHost}/live/${streamKey}.m3u8`,
+    whep: `https://${ingestHost}/rtc/v1/whep/?app=live&stream=${streamKey}`,
+  });
+});
+
 export default router;
