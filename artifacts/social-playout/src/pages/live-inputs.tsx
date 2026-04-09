@@ -8,8 +8,8 @@ import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Radio, Plus, Trash2, Copy, Check, Wifi, WifiOff, MonitorPlay, Activity, Server } from "lucide-react";
-import { useState } from "react";
+import { Radio, Plus, Trash2, Copy, Check, Wifi, WifiOff, MonitorPlay, Activity, Server, Eye, EyeOff } from "lucide-react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { apiBase } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 
@@ -203,6 +203,130 @@ function StreamDetails({ srs }: { srs: NonNullable<SrsInputStatus["srs"]> }) {
   );
 }
 
+function FlvPreview({ streamKey }: { streamKey: string }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const playerRef = useRef<any>(null);
+  const [active, setActive] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const { data: previewUrls } = useQuery<{ flv: string; hls: string; whep: string }>({
+    queryKey: ["srs-preview", streamKey],
+    queryFn: () => apiFetch(`/srs/preview-url/${streamKey}`),
+    enabled: !!streamKey,
+  });
+
+  const flvUrl = previewUrls?.flv ?? "";
+
+  const startPreview = useCallback(async () => {
+    setActive(true);
+    setError(null);
+
+    try {
+      const mpegts = (await import("mpegts.js")).default;
+
+      if (!mpegts.isSupported()) {
+        setError("FLV playback is not supported in this browser.");
+        return;
+      }
+
+      const player = mpegts.createPlayer({
+        type: "flv",
+        isLive: true,
+        url: flvUrl,
+      }, {
+        enableWorker: true,
+        lazyLoadMaxDuration: 3 * 60,
+        seekType: "range",
+        liveBufferLatencyChasing: true,
+        liveBufferLatencyMaxLatency: 1.5,
+        liveBufferLatencyMinRemain: 0.5,
+      });
+
+      player.attachMediaElement(videoRef.current!);
+      player.load();
+      player.play();
+
+      player.on(mpegts.Events.ERROR, () => {
+        setError("Stream not available. Make sure a stream is publishing to this input.");
+        player.destroy();
+        playerRef.current = null;
+      });
+
+      playerRef.current = player;
+    } catch {
+      setError("Failed to initialize FLV player.");
+    }
+  }, [flvUrl]);
+
+  const stopPreview = useCallback(() => {
+    if (playerRef.current) {
+      playerRef.current.pause();
+      playerRef.current.unload();
+      playerRef.current.detachMediaElement();
+      playerRef.current.destroy();
+      playerRef.current = null;
+    }
+    setActive(false);
+    setError(null);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (playerRef.current) {
+        playerRef.current.destroy();
+        playerRef.current = null;
+      }
+    };
+  }, []);
+
+  return (
+    <div className="mt-3">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs text-muted-foreground font-medium">Preview</span>
+        <Button
+          size="sm"
+          variant={active ? "destructive" : "outline"}
+          className="h-6 text-xs px-2"
+          onClick={active ? stopPreview : startPreview}
+        >
+          {active ? (
+            <><EyeOff className="w-3 h-3 mr-1" />Stop</>
+          ) : (
+            <><Eye className="w-3 h-3 mr-1" />Preview</>
+          )}
+        </Button>
+      </div>
+
+      {active && !error && (
+        <div className="aspect-video bg-black rounded-lg overflow-hidden">
+          <video
+            ref={videoRef}
+            className="w-full h-full"
+            muted
+            autoPlay
+            playsInline
+            controls
+          />
+        </div>
+      )}
+
+      {active && error && (
+        <div className="aspect-video bg-muted/30 rounded-lg flex flex-col items-center justify-center gap-2">
+          <EyeOff className="w-8 h-8 text-muted-foreground/20" />
+          <p className="text-xs text-muted-foreground">{error}</p>
+        </div>
+      )}
+
+      {!active && (
+        <div className="text-xs text-muted-foreground bg-muted rounded px-2 py-1 flex items-center gap-2">
+          <code className="truncate flex-1">{flvUrl}</code>
+          <CopyButton text={flvUrl} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function LiveInputsPage() {
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -308,6 +432,7 @@ export default function LiveInputsPage() {
                           </div>
                         )}
                         {srsStatus?.srs && <StreamDetails srs={srsStatus.srs} />}
+                        <FlvPreview streamKey={input.streamKey} />
                       </div>
                     </div>
                     <div className="flex items-center gap-2">

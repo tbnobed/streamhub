@@ -75,6 +75,7 @@
     "zod": "catalog:"
   },
   "dependencies": {
-    "hls.js": "^1.6.15"
+    "hls.js": "^1.6.15",
+    "mpegts.js": "^1.8.0"
   }
 }
