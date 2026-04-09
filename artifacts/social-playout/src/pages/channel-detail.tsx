@@ -4,10 +4,13 @@ import { AppShell } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Play, Square, ChevronLeft, RefreshCw, Activity, Tv2, Radio, Copy, Check, Eye, EyeOff } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Play, Square, ChevronLeft, RefreshCw, Activity, Tv2, Radio, Copy, Check, MonitorPlay, Plus, Trash2, Send } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { apiBase } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
@@ -16,6 +19,17 @@ interface LiveInput {
   id: number;
   name: string;
   protocol: string;
+  status: string;
+}
+
+interface Destination {
+  id: number;
+  name: string;
+  platform: string;
+  streamUrl: string;
+  streamKey: string;
+  channelId: number | null;
+  isActive: boolean;
   status: string;
 }
 
@@ -56,6 +70,18 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json();
 }
 
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      className="p-1 hover:bg-accent rounded"
+      onClick={() => { navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 1500); }}
+    >
+      {copied ? <Check className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3 text-muted-foreground" />}
+    </button>
+  );
+}
+
 function StatusBadge({ status }: { status: string }) {
   const colors: Record<string, string> = {
     live: "bg-red-500 text-white",
@@ -86,11 +112,10 @@ interface PreviewUrls {
   whep: string;
 }
 
-function LivePreviewCard({ streamKey, inputName }: { streamKey: string; inputName: string }) {
+function CompactPreview({ streamKey }: { streamKey: string }) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const hlsRef = useRef<any>(null);
-  const [showPreview, setShowPreview] = useState(false);
-  const [previewError, setPreviewError] = useState<string | null>(null);
+  const playerRef = useRef<any>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const { data: previewUrls } = useQuery<PreviewUrls>({
     queryKey: ["srs-preview", streamKey],
@@ -98,119 +123,105 @@ function LivePreviewCard({ streamKey, inputName }: { streamKey: string; inputNam
     enabled: !!streamKey,
   });
 
+  const flvUrl = previewUrls?.flv ?? "";
+
   useEffect(() => {
-    if (!showPreview || !previewUrls || !videoRef.current) return;
+    if (!flvUrl || !videoRef.current) return;
 
-    let hls: any = null;
-    setPreviewError(null);
+    let player: any = null;
+    let destroyed = false;
 
-    const initPlayer = async () => {
-      const Hls = (await import("hls.js")).default;
+    (async () => {
+      try {
+        const mpegts = (await import("mpegts.js")).default;
+        if (destroyed) return;
 
-      if (Hls.isSupported()) {
-        hls = new Hls({
+        if (!mpegts.isSupported()) {
+          setError("FLV not supported in this browser.");
+          return;
+        }
+
+        player = mpegts.createPlayer({
+          type: "flv",
+          isLive: true,
+          url: flvUrl,
+        }, {
           enableWorker: true,
-          lowLatencyMode: true,
-          liveSyncDurationCount: 3,
-          liveMaxLatencyDurationCount: 6,
-          liveDurationInfinity: true,
-          manifestLoadingTimeOut: 10000,
-          manifestLoadingMaxRetry: 3,
+          lazyLoadMaxDuration: 3 * 60,
+          seekType: "range",
+          liveBufferLatencyChasing: true,
+          liveBufferLatencyMaxLatency: 1.5,
+          liveBufferLatencyMinRemain: 0.5,
         });
 
-        hls.loadSource(previewUrls.hls);
-        hls.attachMedia(videoRef.current!);
-        hls.on(Hls.Events.ERROR, (_e: any, data: any) => {
-          if (data.fatal) {
-            setPreviewError("Stream not available. Make sure a stream is publishing to this input.");
-            hls.destroy();
-          }
+        player.attachMediaElement(videoRef.current!);
+        player.load();
+
+        player.on(mpegts.Events.ERROR, () => {
+          setError("No active stream");
+          try { player?.destroy(); } catch {}
+          player = null;
+          playerRef.current = null;
         });
-        hls.on(Hls.Events.MANIFEST_PARSED, () => {
-          videoRef.current?.play().catch(() => {});
-        });
-        hlsRef.current = hls;
-      } else if (videoRef.current!.canPlayType("application/vnd.apple.mpegurl")) {
-        videoRef.current!.src = previewUrls.hls;
-        videoRef.current!.addEventListener("loadedmetadata", () => {
-          videoRef.current?.play().catch(() => {});
-        });
-      } else {
-        setPreviewError("HLS playback is not supported in this browser.");
+
+        videoRef.current!.play().catch(() => {});
+
+        playerRef.current = player;
+      } catch {
+        if (!destroyed) setError("Failed to initialize player.");
       }
-    };
-
-    initPlayer();
+    })();
 
     return () => {
-      if (hlsRef.current) {
-        hlsRef.current.destroy();
-        hlsRef.current = null;
+      destroyed = true;
+      if (player) {
+        try { player.pause(); } catch {}
+        try { player.unload(); } catch {}
+        try { player.detachMediaElement(); } catch {}
+        try { player.destroy(); } catch {}
+        player = null;
       }
+      playerRef.current = null;
+      setError(null);
     };
-  }, [showPreview, previewUrls]);
+  }, [flvUrl]);
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
+      <CardHeader className="pb-2">
         <CardTitle className="text-base flex items-center gap-2">
-          <Eye className="w-4 h-4" />
+          <MonitorPlay className="w-4 h-4" />
           Live Preview
         </CardTitle>
-        <Button
-          size="sm"
-          variant={showPreview ? "destructive" : "default"}
-          onClick={() => {
-            setShowPreview(!showPreview);
-            setPreviewError(null);
-          }}
-        >
-          {showPreview ? (
-            <><EyeOff className="w-3.5 h-3.5 mr-2" />Stop Preview</>
-          ) : (
-            <><Eye className="w-3.5 h-3.5 mr-2" />Start Preview</>
-          )}
-        </Button>
       </CardHeader>
       <CardContent>
-        {!showPreview && (
-          <div className="aspect-video bg-muted/30 rounded-lg flex flex-col items-center justify-center gap-2">
-            <Tv2 className="w-10 h-10 text-muted-foreground/20" />
-            <p className="text-sm text-muted-foreground">Click "Start Preview" to watch <span className="font-medium">{inputName}</span></p>
-            <p className="text-xs text-muted-foreground">Preview uses HLS — expect 5-10 seconds latency</p>
-          </div>
-        )}
-        {showPreview && previewError && (
-          <div className="aspect-video bg-muted/30 rounded-lg flex flex-col items-center justify-center gap-2">
-            <EyeOff className="w-10 h-10 text-muted-foreground/20" />
-            <p className="text-sm text-muted-foreground">{previewError}</p>
-          </div>
-        )}
-        {showPreview && !previewError && (
-          <div className="aspect-video bg-black rounded-lg overflow-hidden">
+        {!error ? (
+          <div className="bg-black rounded-lg overflow-hidden" style={{ height: "180px" }}>
             <video
               ref={videoRef}
-              className="w-full h-full"
+              className="w-full h-full object-contain"
               muted
-              autoPlay
               playsInline
               controls
             />
           </div>
+        ) : (
+          <div className="bg-muted/30 rounded-lg flex flex-col items-center justify-center gap-2" style={{ height: "180px" }}>
+            <Tv2 className="w-8 h-8 text-muted-foreground/20" />
+            <p className="text-xs text-muted-foreground">{error}</p>
+          </div>
         )}
         {previewUrls && (
-          <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
-            <div className="bg-muted rounded p-2">
-              <span className="text-muted-foreground">HLS</span>
-              <code className="block truncate mt-0.5">{previewUrls.hls}</code>
+          <div className="mt-2 space-y-1">
+            <div className="flex items-center gap-2 bg-muted rounded px-2 py-1 text-xs">
+              <span className="text-muted-foreground shrink-0">FLV</span>
+              <code className="truncate flex-1">{previewUrls.flv}</code>
+              <CopyButton text={previewUrls.flv} />
             </div>
-            <div className="bg-muted rounded p-2">
-              <span className="text-muted-foreground">HTTP-FLV</span>
-              <code className="block truncate mt-0.5">{previewUrls.flv}</code>
-            </div>
-            <div className="bg-muted rounded p-2">
-              <span className="text-muted-foreground">WebRTC (WHEP)</span>
-              <code className="block truncate mt-0.5">{previewUrls.whep}</code>
+            <div className="flex items-center gap-2 bg-muted rounded px-2 py-1 text-xs">
+              <span className="text-muted-foreground shrink-0">HLS</span>
+              <code className="truncate flex-1">{previewUrls.hls}</code>
+              <CopyButton text={previewUrls.hls} />
             </div>
           </div>
         )}
@@ -227,6 +238,8 @@ export default function ChannelDetailPage() {
   const [selectedSourceMode, setSelectedSourceMode] = useState("");
   const [switchPlaylist, setSwitchPlaylist] = useState("");
   const [switchLiveInput, setSwitchLiveInput] = useState("");
+  const [addDestOpen, setAddDestOpen] = useState(false);
+  const [destForm, setDestForm] = useState({ name: "", platform: "rtmp", streamUrl: "", streamKey: "" });
 
   const { data: channel, isLoading } = useQuery<Channel>({
     queryKey: ["channel", channelId],
@@ -243,6 +256,12 @@ export default function ChannelDetailPage() {
   const { data: liveInputs = [] } = useQuery<LiveInput[]>({
     queryKey: ["live-inputs"],
     queryFn: () => apiFetch("/live-inputs"),
+  });
+
+  const { data: destinations = [], refetch: refetchDests } = useQuery<Destination[]>({
+    queryKey: ["destinations", channelId],
+    queryFn: () => apiFetch(`/destinations?channelId=${channelId}`),
+    enabled: !!channelId,
   });
 
   const startMutation = useMutation({
@@ -270,6 +289,33 @@ export default function ChannelDetailPage() {
       setSwitchPlaylist("");
       setSwitchLiveInput("");
     },
+    onError: (e: Error) => toast({ variant: "destructive", title: "Error", description: e.message }),
+  });
+
+  const createDestMutation = useMutation({
+    mutationFn: (body: typeof destForm) =>
+      apiFetch("/destinations", {
+        method: "POST",
+        body: JSON.stringify({ ...body, channelId: Number(channelId) }),
+      }),
+    onSuccess: () => {
+      refetchDests();
+      setAddDestOpen(false);
+      setDestForm({ name: "", platform: "rtmp", streamUrl: "", streamKey: "" });
+      toast({ title: "Destination added" });
+    },
+    onError: (e: Error) => toast({ variant: "destructive", title: "Error", description: e.message }),
+  });
+
+  const deleteDestMutation = useMutation({
+    mutationFn: (id: number) => apiFetch(`/destinations/${id}`, { method: "DELETE" }),
+    onSuccess: () => { refetchDests(); toast({ title: "Destination removed" }); },
+    onError: (e: Error) => toast({ variant: "destructive", title: "Error", description: e.message }),
+  });
+
+  const toggleDestMutation = useMutation({
+    mutationFn: (id: number) => apiFetch(`/destinations/${id}/toggle`, { method: "POST" }),
+    onSuccess: () => { refetchDests(); },
     onError: (e: Error) => toast({ variant: "destructive", title: "Error", description: e.message }),
   });
 
@@ -301,7 +347,6 @@ export default function ChannelDetailPage() {
   return (
     <AppShell>
       <div className="space-y-6">
-        {/* Header */}
         <div className="flex items-center gap-4">
           <Link href="/channels">
             <Button variant="ghost" size="icon"><ChevronLeft className="w-5 h-5" /></Button>
@@ -327,10 +372,9 @@ export default function ChannelDetailPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Stream stats */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <Card className="lg:col-span-2">
-            <CardHeader className="flex flex-row items-center justify-between">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-base flex items-center gap-2">
                 <Activity className="w-4 h-4" />Stream Health
               </CardTitle>
@@ -358,15 +402,34 @@ export default function ChannelDetailPage() {
                   </div>
                 </div>
               ) : (
-                <div className="py-8 text-center text-muted-foreground">
-                  <Tv2 className="w-10 h-10 mx-auto mb-2 opacity-20" />
+                <div className="py-6 text-center text-muted-foreground">
+                  <Tv2 className="w-8 h-8 mx-auto mb-2 opacity-20" />
                   <p className="text-sm">Channel is {channel.status}. Start the channel to see stream stats.</p>
                 </div>
               )}
             </CardContent>
           </Card>
 
-          {/* Source control */}
+          {channel.sourceMode === "live_input" && channel.liveInput ? (
+            <CompactPreview streamKey={channel.liveInput.streamKey} />
+          ) : (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <MonitorPlay className="w-4 h-4" />Live Preview
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="bg-muted/30 rounded-lg flex flex-col items-center justify-center gap-2" style={{ height: "180px" }}>
+                  <Tv2 className="w-8 h-8 text-muted-foreground/20" />
+                  <p className="text-xs text-muted-foreground text-center">Switch to a live input to enable preview</p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <Card>
             <CardHeader><CardTitle className="text-base">Source Control</CardTitle></CardHeader>
             <CardContent className="space-y-4">
@@ -486,33 +549,98 @@ export default function ChannelDetailPage() {
               </div>
             </CardContent>
           </Card>
-        </div>
 
-        {/* Live Preview */}
-        {channel.sourceMode === "live_input" && channel.liveInput && (
-          <LivePreviewCard streamKey={channel.liveInput.streamKey} inputName={channel.liveInput.name} />
-        )}
-
-        {/* Destinations */}
-        {channel.destinations && channel.destinations.length > 0 && (
           <Card>
-            <CardHeader><CardTitle className="text-base">Output Destinations</CardTitle></CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Send className="w-4 h-4" />
+                Output Destinations
+              </CardTitle>
+              <Button size="sm" variant="outline" onClick={() => setAddDestOpen(true)}>
+                <Plus className="w-3.5 h-3.5 mr-1" />Add
+              </Button>
+            </CardHeader>
             <CardContent>
-              <div className="space-y-2">
-                {channel.destinations.map((dest) => (
-                  <div key={dest.id} className="flex items-center justify-between p-3 rounded-lg bg-accent/30">
-                    <div>
-                      <div className="font-medium text-sm">{dest.name}</div>
-                      <div className="text-xs text-muted-foreground">{dest.streamUrl}</div>
+              {destinations.length === 0 ? (
+                <div className="py-8 text-center text-muted-foreground">
+                  <Send className="w-8 h-8 mx-auto mb-2 opacity-20" />
+                  <p className="text-sm">No output destinations configured.</p>
+                  <p className="text-xs mt-1">Add RTMP, YouTube, or Facebook destinations to start broadcasting.</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {destinations.map((dest) => (
+                    <div key={dest.id} className="flex items-center justify-between p-3 rounded-lg bg-accent/30">
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                        <Switch
+                          checked={dest.isActive}
+                          onCheckedChange={() => toggleDestMutation.mutate(dest.id)}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-sm truncate">{dest.name}</span>
+                            <Badge variant="outline" className="capitalize text-[10px] shrink-0">{dest.platform}</Badge>
+                          </div>
+                          <code className="text-[11px] text-muted-foreground truncate block">{dest.streamUrl}</code>
+                        </div>
+                      </div>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="shrink-0 ml-2"
+                        onClick={() => { if (confirm("Remove this destination?")) deleteDestMutation.mutate(dest.id); }}
+                      >
+                        <Trash2 className="w-4 h-4 text-muted-foreground" />
+                      </Button>
                     </div>
-                    <Badge variant="outline" className="capitalize">{dest.platform}</Badge>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
-        )}
+        </div>
       </div>
+
+      <Dialog open={addDestOpen} onOpenChange={setAddDestOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Add Output Destination</DialogTitle></DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Name</Label>
+              <Input value={destForm.name} onChange={(e) => setDestForm({ ...destForm, name: e.target.value })} placeholder="YouTube Main" />
+            </div>
+            <div className="space-y-2">
+              <Label>Platform</Label>
+              <Select value={destForm.platform} onValueChange={(v) => setDestForm({ ...destForm, platform: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="rtmp">RTMP</SelectItem>
+                  <SelectItem value="youtube">YouTube</SelectItem>
+                  <SelectItem value="facebook">Facebook</SelectItem>
+                  <SelectItem value="custom">Custom</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Stream URL</Label>
+              <Input value={destForm.streamUrl} onChange={(e) => setDestForm({ ...destForm, streamUrl: e.target.value })} placeholder="rtmp://a.rtmp.youtube.com/live2" />
+            </div>
+            <div className="space-y-2">
+              <Label>Stream Key</Label>
+              <Input value={destForm.streamKey} onChange={(e) => setDestForm({ ...destForm, streamKey: e.target.value })} placeholder="xxxx-xxxx-xxxx-xxxx" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddDestOpen(false)}>Cancel</Button>
+            <Button
+              disabled={!destForm.name || !destForm.streamUrl || !destForm.streamKey || createDestMutation.isPending}
+              onClick={() => createDestMutation.mutate(destForm)}
+            >
+              {createDestMutation.isPending ? "Adding…" : "Add Destination"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppShell>
   );
 }

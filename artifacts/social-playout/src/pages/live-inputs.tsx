@@ -247,12 +247,15 @@ function FlvPreview({ streamKey }: { streamKey: string }) {
 
         player.attachMediaElement(videoRef.current!);
         player.load();
-        player.play();
 
         player.on(mpegts.Events.ERROR, () => {
           setError("No active stream");
-          if (player) { player.destroy(); player = null; }
+          try { player?.destroy(); } catch {}
+          player = null;
+          playerRef.current = null;
         });
+
+        videoRef.current!.play().catch(() => {});
 
         playerRef.current = player;
       } catch {
@@ -282,7 +285,6 @@ function FlvPreview({ streamKey }: { streamKey: string }) {
             ref={videoRef}
             className="w-full h-full object-contain"
             muted
-            autoPlay
             playsInline
             controls
           />
