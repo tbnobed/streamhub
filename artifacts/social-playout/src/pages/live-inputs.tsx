@@ -8,8 +8,8 @@ import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Radio, Plus, Trash2, Copy, Check, Wifi, WifiOff, MonitorPlay, Activity, Server, Eye, EyeOff } from "lucide-react";
-import { useState, useRef, useEffect, useCallback } from "react";
+import { Radio, Plus, Trash2, Copy, Check, Wifi, WifiOff, MonitorPlay, Activity, Server } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
 import { apiBase } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 
@@ -206,7 +206,6 @@ function StreamDetails({ srs }: { srs: NonNullable<SrsInputStatus["srs"]> }) {
 function FlvPreview({ streamKey }: { streamKey: string }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const playerRef = useRef<any>(null);
-  const [active, setActive] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const { data: previewUrls } = useQuery<{ flv: string; hls: string; whep: string }>({
@@ -217,108 +216,85 @@ function FlvPreview({ streamKey }: { streamKey: string }) {
 
   const flvUrl = previewUrls?.flv ?? "";
 
-  const startPreview = useCallback(async () => {
-    setActive(true);
-    setError(null);
+  useEffect(() => {
+    if (!flvUrl || !videoRef.current) return;
 
-    try {
-      const mpegts = (await import("mpegts.js")).default;
+    let player: any = null;
+    let destroyed = false;
 
-      if (!mpegts.isSupported()) {
-        setError("FLV playback is not supported in this browser.");
-        return;
+    (async () => {
+      try {
+        const mpegts = (await import("mpegts.js")).default;
+        if (destroyed) return;
+
+        if (!mpegts.isSupported()) {
+          setError("FLV playback not supported in this browser.");
+          return;
+        }
+
+        player = mpegts.createPlayer({
+          type: "flv",
+          isLive: true,
+          url: flvUrl,
+        }, {
+          enableWorker: true,
+          lazyLoadMaxDuration: 3 * 60,
+          seekType: "range",
+          liveBufferLatencyChasing: true,
+          liveBufferLatencyMaxLatency: 1.5,
+          liveBufferLatencyMinRemain: 0.5,
+        });
+
+        player.attachMediaElement(videoRef.current!);
+        player.load();
+        player.play();
+
+        player.on(mpegts.Events.ERROR, () => {
+          setError("No active stream");
+          if (player) { player.destroy(); player = null; }
+        });
+
+        playerRef.current = player;
+      } catch {
+        if (!destroyed) setError("Failed to initialize player.");
       }
+    })();
 
-      const player = mpegts.createPlayer({
-        type: "flv",
-        isLive: true,
-        url: flvUrl,
-      }, {
-        enableWorker: true,
-        lazyLoadMaxDuration: 3 * 60,
-        seekType: "range",
-        liveBufferLatencyChasing: true,
-        liveBufferLatencyMaxLatency: 1.5,
-        liveBufferLatencyMinRemain: 0.5,
-      });
-
-      player.attachMediaElement(videoRef.current!);
-      player.load();
-      player.play();
-
-      player.on(mpegts.Events.ERROR, () => {
-        setError("Stream not available. Make sure a stream is publishing to this input.");
-        player.destroy();
-        playerRef.current = null;
-      });
-
-      playerRef.current = player;
-    } catch {
-      setError("Failed to initialize FLV player.");
-    }
+    return () => {
+      destroyed = true;
+      if (player) {
+        try { player.pause(); } catch {}
+        try { player.unload(); } catch {}
+        try { player.detachMediaElement(); } catch {}
+        try { player.destroy(); } catch {}
+        player = null;
+      }
+      playerRef.current = null;
+      setError(null);
+    };
   }, [flvUrl]);
 
-  const stopPreview = useCallback(() => {
-    if (playerRef.current) {
-      playerRef.current.pause();
-      playerRef.current.unload();
-      playerRef.current.detachMediaElement();
-      playerRef.current.destroy();
-      playerRef.current = null;
-    }
-    setActive(false);
-    setError(null);
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      if (playerRef.current) {
-        playerRef.current.destroy();
-        playerRef.current = null;
-      }
-    };
-  }, []);
-
   return (
-    <div className="mt-3">
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-xs text-muted-foreground font-medium">Preview</span>
-        <Button
-          size="sm"
-          variant={active ? "destructive" : "outline"}
-          className="h-6 text-xs px-2"
-          onClick={active ? stopPreview : startPreview}
-        >
-          {active ? (
-            <><EyeOff className="w-3 h-3 mr-1" />Stop</>
-          ) : (
-            <><Eye className="w-3 h-3 mr-1" />Preview</>
-          )}
-        </Button>
-      </div>
-
-      {active && !error && (
-        <div className="aspect-video bg-black rounded-lg overflow-hidden">
+    <div className="h-full flex flex-col">
+      {!error ? (
+        <div className="flex-1 bg-black rounded-lg overflow-hidden min-h-0">
           <video
             ref={videoRef}
-            className="w-full h-full"
+            className="w-full h-full object-contain"
             muted
             autoPlay
             playsInline
             controls
           />
         </div>
-      )}
-
-      {active && error && (
-        <div className="aspect-video bg-muted/30 rounded-lg flex flex-col items-center justify-center gap-2">
-          <EyeOff className="w-8 h-8 text-muted-foreground/20" />
+      ) : (
+        <div className="flex-1 bg-muted/30 rounded-lg flex flex-col items-center justify-center gap-2 min-h-[120px]">
+          <MonitorPlay className="w-8 h-8 text-muted-foreground/20" />
           <p className="text-xs text-muted-foreground">{error}</p>
         </div>
       )}
-
-      {!active && (
-        <div className="text-xs text-muted-foreground bg-muted rounded px-2 py-1 flex items-center gap-2">
+      {flvUrl && (
+        <div className="mt-1.5 text-xs text-muted-foreground bg-muted rounded px-2 py-1 flex items-center gap-2">
           <code className="truncate flex-1">{flvUrl}</code>
           <CopyButton text={flvUrl} />
         </div>
@@ -402,44 +378,46 @@ export default function LiveInputsPage() {
             return (
               <Card key={input.id}>
                 <CardContent className="p-5">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 rounded-lg bg-accent flex items-center justify-center flex-shrink-0">
-                        {srsStatus?.srs?.isLive ? (
-                          <MonitorPlay className="w-5 h-5 text-green-500" />
-                        ) : (
-                          <Radio className="w-5 h-5 text-primary" />
-                        )}
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-semibold">{input.name}</span>
-                          <Badge variant="outline" className="text-xs uppercase">{input.protocol}</Badge>
-                          <StreamStatusBadge srs={srsStatus?.srs ?? null} />
-                        </div>
-                        {input.ingestUrl && (
-                          <div className="mt-2 space-y-1">
-                            <div className="text-xs text-muted-foreground">Ingest URL</div>
-                            <div className="flex items-center gap-2 bg-muted rounded px-2 py-1">
-                              <code className="text-xs flex-1 truncate">{input.ingestUrl}</code>
-                              <CopyButton text={input.ingestUrl} />
-                            </div>
-                            <div className="text-xs text-muted-foreground mt-1">Stream Key</div>
-                            <div className="flex items-center gap-2 bg-muted rounded px-2 py-1">
-                              <code className="text-xs flex-1 font-mono">{input.streamKey}</code>
-                              <CopyButton text={input.streamKey} />
+                  <div className="grid grid-cols-[1fr_1fr] gap-5 items-stretch">
+                    <div className="flex flex-col">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-lg bg-accent flex items-center justify-center flex-shrink-0">
+                            {srsStatus?.srs?.isLive ? (
+                              <MonitorPlay className="w-5 h-5 text-green-500" />
+                            ) : (
+                              <Radio className="w-5 h-5 text-primary" />
+                            )}
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold">{input.name}</span>
+                              <Badge variant="outline" className="text-xs uppercase">{input.protocol}</Badge>
+                              <StreamStatusBadge srs={srsStatus?.srs ?? null} />
                             </div>
                           </div>
-                        )}
-                        {srsStatus?.srs && <StreamDetails srs={srsStatus.srs} />}
-                        <FlvPreview streamKey={input.streamKey} />
+                        </div>
+                        <Button size="icon" variant="ghost" onClick={() => { if (confirm("Delete input?")) deleteMutation.mutate(input.id); }}>
+                          <Trash2 className="w-4 h-4 text-muted-foreground" />
+                        </Button>
                       </div>
+                      {input.ingestUrl && (
+                        <div className="mt-3 space-y-1">
+                          <div className="text-xs text-muted-foreground">Ingest URL</div>
+                          <div className="flex items-center gap-2 bg-muted rounded px-2 py-1">
+                            <code className="text-xs flex-1 truncate">{input.ingestUrl}</code>
+                            <CopyButton text={input.ingestUrl} />
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-1">Stream Key</div>
+                          <div className="flex items-center gap-2 bg-muted rounded px-2 py-1">
+                            <code className="text-xs flex-1 font-mono">{input.streamKey}</code>
+                            <CopyButton text={input.streamKey} />
+                          </div>
+                        </div>
+                      )}
+                      {srsStatus?.srs && <StreamDetails srs={srsStatus.srs} />}
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Button size="icon" variant="ghost" onClick={() => { if (confirm("Delete input?")) deleteMutation.mutate(input.id); }}>
-                        <Trash2 className="w-4 h-4 text-muted-foreground" />
-                      </Button>
-                    </div>
+                    <FlvPreview streamKey={input.streamKey} />
                   </div>
                 </CardContent>
               </Card>
