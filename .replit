@@ -1,4 +1,4 @@
-modules = ["nodejs-24"]
+modules = ["nodejs-24", "postgresql-16"]
 
 [[artifacts]]
 id = "artifacts/api-server"
@@ -30,3 +30,6 @@ timeoutMs = 20000
 [userenv.shared]
 INGEST_HOST = "slorg1.obtv.io"
 SRS_API_URL = "http://slorg1.obtv.io:1985"
+
+[nix]
+channel = "stable-25_05"

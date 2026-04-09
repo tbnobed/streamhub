@@ -108,12 +108,14 @@ export async function seedIfEmpty(): Promise<void> {
     userId: admin!.id,
   }).returning();
 
+  const seedStreamKey = crypto.randomBytes(16).toString("hex");
+  const ingestHost = process.env.INGEST_HOST ?? "ingest.yourdomain.com";
   await db.insert(liveInputsTable).values({
     name: "Studio A - RTMP",
     channelId: channel!.id,
     protocol: "rtmp",
-    streamKey: crypto.randomBytes(16).toString("hex"),
-    ingestUrl: "rtmp://ingest.yourdomain.com/live/studio-a",
+    streamKey: seedStreamKey,
+    ingestUrl: `rtmp://${ingestHost}/live/${seedStreamKey}`,
     status: "idle",
     reconnectCount: 0,
   });
