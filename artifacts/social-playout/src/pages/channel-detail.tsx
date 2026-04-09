@@ -7,10 +7,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Play, Square, ChevronLeft, RefreshCw, Activity, Tv2 } from "lucide-react";
+import { Play, Square, ChevronLeft, RefreshCw, Activity, Tv2, Radio } from "lucide-react";
 import { useState } from "react";
 import { apiBase } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
+
+interface LiveInput {
+  id: number;
+  name: string;
+  protocol: string;
+  status: string;
+}
 
 interface Channel {
   id: number;
@@ -74,7 +81,9 @@ export default function ChannelDetailPage() {
   const channelId = params?.id;
   const qc = useQueryClient();
   const { toast } = useToast();
+  const [selectedSourceMode, setSelectedSourceMode] = useState("");
   const [switchPlaylist, setSwitchPlaylist] = useState("");
+  const [switchLiveInput, setSwitchLiveInput] = useState("");
 
   const { data: channel, isLoading } = useQuery<Channel>({
     queryKey: ["channel", channelId],
@@ -86,6 +95,11 @@ export default function ChannelDetailPage() {
   const { data: playlists = [] } = useQuery<Array<{ id: number; name: string }>>({
     queryKey: ["playlists"],
     queryFn: () => apiFetch("/playlists"),
+  });
+
+  const { data: liveInputs = [] } = useQuery<LiveInput[]>({
+    queryKey: ["live-inputs"],
+    queryFn: () => apiFetch("/live-inputs"),
   });
 
   const startMutation = useMutation({
@@ -101,13 +115,33 @@ export default function ChannelDetailPage() {
   });
 
   const switchMutation = useMutation({
-    mutationFn: (playlistId: string) => apiFetch(`/channels/${channelId}/switch-source`, {
-      method: "POST",
-      body: JSON.stringify({ sourceMode: "playlist", sourceRef: playlistId }),
-    }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["channel", channelId] }); toast({ title: "Source switched" }); },
+    mutationFn: (body: { sourceMode: string; playlistId?: number; liveInputId?: number }) =>
+      apiFetch(`/channels/${channelId}/switch-source`, {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["channel", channelId] });
+      toast({ title: "Source switched" });
+      setSelectedSourceMode("");
+      setSwitchPlaylist("");
+      setSwitchLiveInput("");
+    },
     onError: (e: Error) => toast({ variant: "destructive", title: "Error", description: e.message }),
   });
+
+  const handleSwitchSource = () => {
+    const mode = selectedSourceMode || channel?.sourceMode;
+    if (mode === "playlist" && switchPlaylist) {
+      switchMutation.mutate({ sourceMode: "playlist", playlistId: Number(switchPlaylist) });
+    } else if (mode === "live_input" && switchLiveInput) {
+      switchMutation.mutate({ sourceMode: "live_input", liveInputId: Number(switchLiveInput) });
+    } else if (mode === "fallback") {
+      switchMutation.mutate({ sourceMode: "fallback" });
+    }
+  };
+
+  const activeSourceMode = selectedSourceMode || channel?.sourceMode || "playlist";
 
   if (isLoading || !channel) {
     return (
@@ -193,44 +227,87 @@ export default function ChannelDetailPage() {
           <Card>
             <CardHeader><CardTitle className="text-base">Source Control</CardTitle></CardHeader>
             <CardContent className="space-y-4">
-              {channel.sourceMode === "playlist" && (
-                <div className="space-y-3">
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">Current Source</Label>
-                    <p className="text-sm font-medium">{channel.sourceName ?? "None"}</p>
-                  </div>
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">Current Mode</Label>
+                <p className="text-sm font-medium capitalize">{channel.sourceMode.replace("_", " ")}</p>
+                {channel.sourceName && (
+                  <p className="text-xs text-muted-foreground">{channel.sourceName}</p>
+                )}
+              </div>
+
+              <div className="border-t border-border pt-4 space-y-3">
+                <Label className="text-xs">Source Mode</Label>
+                <Select
+                  value={activeSourceMode}
+                  onValueChange={(v) => {
+                    setSelectedSourceMode(v);
+                    setSwitchPlaylist("");
+                    setSwitchLiveInput("");
+                  }}
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="playlist">Playlist</SelectItem>
+                    <SelectItem value="live_input">Live Input</SelectItem>
+                    <SelectItem value="fallback">Fallback Slate</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                {activeSourceMode === "playlist" && (
                   <div className="space-y-2">
-                    <Label className="text-xs">Switch Playlist</Label>
+                    <Label className="text-xs">Select Playlist</Label>
                     <Select value={switchPlaylist} onValueChange={setSwitchPlaylist}>
-                      <SelectTrigger><SelectValue placeholder="Select playlist…" /></SelectTrigger>
+                      <SelectTrigger><SelectValue placeholder="Choose playlist…" /></SelectTrigger>
                       <SelectContent>
                         {playlists.map((p) => (
                           <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
-                    <Button
-                      size="sm"
-                      className="w-full"
-                      disabled={!switchPlaylist || switchMutation.isPending}
-                      onClick={() => switchMutation.mutate(switchPlaylist)}
-                    >
-                      <RefreshCw className="w-3.5 h-3.5 mr-2" />
-                      Switch Source
-                    </Button>
                   </div>
-                </div>
-              )}
-              {channel.sourceMode === "live_input" && (
-                <div className="text-sm text-muted-foreground">
-                  Receiving from live RTMP/SRT input.
-                </div>
-              )}
-              {channel.sourceMode === "fallback" && (
-                <div className="text-sm text-muted-foreground">
-                  Broadcasting fallback slate.
-                </div>
-              )}
+                )}
+
+                {activeSourceMode === "live_input" && (
+                  <div className="space-y-2">
+                    <Label className="text-xs">Select Live Input</Label>
+                    <Select value={switchLiveInput} onValueChange={setSwitchLiveInput}>
+                      <SelectTrigger><SelectValue placeholder="Choose live input…" /></SelectTrigger>
+                      <SelectContent>
+                        {liveInputs.map((li) => (
+                          <SelectItem key={li.id} value={String(li.id)}>
+                            <div className="flex items-center gap-2">
+                              <Radio className="w-3 h-3" />
+                              <span>{li.name}</span>
+                              <Badge variant="outline" className="text-[10px] uppercase ml-1">{li.protocol}</Badge>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {liveInputs.length === 0 && (
+                      <p className="text-xs text-muted-foreground">No live inputs configured. Create one on the Live Inputs page.</p>
+                    )}
+                  </div>
+                )}
+
+                {activeSourceMode === "fallback" && (
+                  <p className="text-xs text-muted-foreground">Will broadcast the fallback slate until switched to another source.</p>
+                )}
+
+                <Button
+                  size="sm"
+                  className="w-full"
+                  disabled={
+                    switchMutation.isPending ||
+                    (activeSourceMode === "playlist" && !switchPlaylist) ||
+                    (activeSourceMode === "live_input" && !switchLiveInput)
+                  }
+                  onClick={handleSwitchSource}
+                >
+                  <RefreshCw className="w-3.5 h-3.5 mr-2" />
+                  {switchMutation.isPending ? "Switching…" : "Switch Source"}
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </div>
