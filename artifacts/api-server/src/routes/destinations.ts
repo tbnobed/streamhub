@@ -78,6 +78,7 @@ router.patch("/destinations/:id", async (req, res): Promise<void> => {
   if (parsed.data.streamUrl != null) updates.streamUrl = parsed.data.streamUrl;
   if (parsed.data.streamKey != null) updates.streamKey = parsed.data.streamKey;
   if (parsed.data.isActive != null) updates.isActive = parsed.data.isActive;
+  if ("channelId" in req.body) updates.channelId = req.body.channelId;
 
   const [dest] = await db
     .update(destinationsTable)

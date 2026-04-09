@@ -239,6 +239,7 @@ export default function ChannelDetailPage() {
   const [switchPlaylist, setSwitchPlaylist] = useState("");
   const [switchLiveInput, setSwitchLiveInput] = useState("");
   const [addDestOpen, setAddDestOpen] = useState(false);
+  const [createDestOpen, setCreateDestOpen] = useState(false);
   const [destForm, setDestForm] = useState({ name: "", platform: "rtmp", streamUrl: "", streamKey: "" });
 
   const { data: channel, isLoading } = useQuery<Channel>({
@@ -258,10 +259,15 @@ export default function ChannelDetailPage() {
     queryFn: () => apiFetch("/live-inputs"),
   });
 
-  const { data: destinations = [], refetch: refetchDests } = useQuery<Destination[]>({
-    queryKey: ["destinations", channelId],
+  const { data: channelDests = [], refetch: refetchChannelDests } = useQuery<Destination[]>({
+    queryKey: ["destinations", "channel", channelId],
     queryFn: () => apiFetch(`/destinations?channelId=${channelId}`),
     enabled: !!channelId,
+  });
+
+  const { data: allDests = [], refetch: refetchAllDests } = useQuery<Destination[]>({
+    queryKey: ["destinations", "all"],
+    queryFn: () => apiFetch("/destinations"),
   });
 
   const startMutation = useMutation({
@@ -292,24 +298,44 @@ export default function ChannelDetailPage() {
     onError: (e: Error) => toast({ variant: "destructive", title: "Error", description: e.message }),
   });
 
+  const refetchDests = () => { refetchChannelDests(); refetchAllDests(); };
+
   const createDestMutation = useMutation({
     mutationFn: (body: typeof destForm) =>
       apiFetch("/destinations", {
         method: "POST",
-        body: JSON.stringify({ ...body, channelId: Number(channelId) }),
+        body: JSON.stringify({ ...body }),
       }),
     onSuccess: () => {
       refetchDests();
-      setAddDestOpen(false);
+      setCreateDestOpen(false);
       setDestForm({ name: "", platform: "rtmp", streamUrl: "", streamKey: "" });
-      toast({ title: "Destination added" });
+      toast({ title: "Destination preset created" });
     },
     onError: (e: Error) => toast({ variant: "destructive", title: "Error", description: e.message }),
   });
 
-  const deleteDestMutation = useMutation({
-    mutationFn: (id: number) => apiFetch(`/destinations/${id}`, { method: "DELETE" }),
-    onSuccess: () => { refetchDests(); toast({ title: "Destination removed" }); },
+  const assignDestMutation = useMutation({
+    mutationFn: (destId: number) =>
+      apiFetch(`/destinations/${destId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ channelId: Number(channelId) }),
+      }),
+    onSuccess: () => {
+      refetchDests();
+      setAddDestOpen(false);
+      toast({ title: "Destination assigned to channel" });
+    },
+    onError: (e: Error) => toast({ variant: "destructive", title: "Error", description: e.message }),
+  });
+
+  const unassignDestMutation = useMutation({
+    mutationFn: (destId: number) =>
+      apiFetch(`/destinations/${destId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ channelId: null }),
+      }),
+    onSuccess: () => { refetchDests(); toast({ title: "Destination removed from channel" }); },
     onError: (e: Error) => toast({ variant: "destructive", title: "Error", description: e.message }),
   });
 
@@ -556,20 +582,25 @@ export default function ChannelDetailPage() {
                 <Send className="w-4 h-4" />
                 Output Destinations
               </CardTitle>
-              <Button size="sm" variant="outline" onClick={() => setAddDestOpen(true)}>
-                <Plus className="w-3.5 h-3.5 mr-1" />Add
-              </Button>
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline" onClick={() => setAddDestOpen(true)}>
+                  <Plus className="w-3.5 h-3.5 mr-1" />Assign
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => setCreateDestOpen(true)}>
+                  <Plus className="w-3.5 h-3.5 mr-1" />New
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
-              {destinations.length === 0 ? (
+              {channelDests.length === 0 ? (
                 <div className="py-8 text-center text-muted-foreground">
                   <Send className="w-8 h-8 mx-auto mb-2 opacity-20" />
-                  <p className="text-sm">No output destinations configured.</p>
-                  <p className="text-xs mt-1">Add RTMP, YouTube, or Facebook destinations to start broadcasting.</p>
+                  <p className="text-sm">No destinations assigned to this channel.</p>
+                  <p className="text-xs mt-1">Assign existing presets or create a new destination.</p>
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {destinations.map((dest) => (
+                  {channelDests.map((dest) => (
                     <div key={dest.id} className="flex items-center justify-between p-3 rounded-lg bg-accent/30">
                       <div className="flex items-center gap-3 min-w-0 flex-1">
                         <Switch
@@ -585,12 +616,12 @@ export default function ChannelDetailPage() {
                         </div>
                       </div>
                       <Button
-                        size="icon"
+                        size="sm"
                         variant="ghost"
-                        className="shrink-0 ml-2"
-                        onClick={() => { if (confirm("Remove this destination?")) deleteDestMutation.mutate(dest.id); }}
+                        className="shrink-0 ml-2 text-xs"
+                        onClick={() => { if (confirm("Remove this destination from the channel?")) unassignDestMutation.mutate(dest.id); }}
                       >
-                        <Trash2 className="w-4 h-4 text-muted-foreground" />
+                        <Trash2 className="w-3.5 h-3.5 mr-1" />Remove
                       </Button>
                     </div>
                   ))}
@@ -603,7 +634,49 @@ export default function ChannelDetailPage() {
 
       <Dialog open={addDestOpen} onOpenChange={setAddDestOpen}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Add Output Destination</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>Assign Existing Destination</DialogTitle></DialogHeader>
+          <div className="space-y-2 py-2">
+            {(() => {
+              const channelDestIds = new Set(channelDests.map((d) => d.id));
+              const available = allDests.filter((d) => !channelDestIds.has(d.id));
+              if (available.length === 0) {
+                return (
+                  <div className="py-6 text-center text-muted-foreground">
+                    <p className="text-sm">No unassigned destinations available.</p>
+                    <p className="text-xs mt-1">Create a new destination preset first.</p>
+                  </div>
+                );
+              }
+              return available.map((dest) => (
+                <div key={dest.id} className="flex items-center justify-between p-3 rounded-lg bg-accent/30">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-sm">{dest.name}</span>
+                      <Badge variant="outline" className="capitalize text-[10px]">{dest.platform}</Badge>
+                    </div>
+                    <code className="text-[11px] text-muted-foreground truncate block">{dest.streamUrl}</code>
+                  </div>
+                  <Button
+                    size="sm"
+                    className="shrink-0 ml-3"
+                    disabled={assignDestMutation.isPending}
+                    onClick={() => assignDestMutation.mutate(dest.id)}
+                  >
+                    Assign
+                  </Button>
+                </div>
+              ));
+            })()}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddDestOpen(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={createDestOpen} onOpenChange={setCreateDestOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Create Destination Preset</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-2">
               <Label>Name</Label>
@@ -631,12 +704,12 @@ export default function ChannelDetailPage() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setAddDestOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setCreateDestOpen(false)}>Cancel</Button>
             <Button
               disabled={!destForm.name || !destForm.streamUrl || !destForm.streamKey || createDestMutation.isPending}
               onClick={() => createDestMutation.mutate(destForm)}
             >
-              {createDestMutation.isPending ? "Adding…" : "Add Destination"}
+              {createDestMutation.isPending ? "Creating…" : "Create Destination"}
             </Button>
           </DialogFooter>
         </DialogContent>
