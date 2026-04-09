@@ -17,7 +17,7 @@ Port 80 (proxy)
 3. **`worker/`** — FFmpeg playout worker service (standalone, Docker-ready)
 
 ## Key Features
-- Channel management (start/stop/switch-source)
+- Channel management (start/stop/switch-source) with playout job creation
 - Asset library (register video/image/audio files)
 - Playlist builder with drag-and-drop ordering
 - Live RTMP/SRT ingest endpoints with stream key generation

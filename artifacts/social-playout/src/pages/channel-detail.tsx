@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Play, Square, ChevronLeft, RefreshCw, Activity, Tv2, Radio, Copy, Check, MonitorPlay, Plus, Trash2, Send } from "lucide-react";
+import { Play, Square, ChevronLeft, RefreshCw, Activity, Tv2, Radio, Copy, Check, MonitorPlay, Plus, Trash2, Send, Zap } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { apiBase } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
@@ -33,6 +33,17 @@ interface Destination {
   status: string;
 }
 
+interface ActiveJob {
+  id: number;
+  status: string;
+  sourceMode: string;
+  sourceRef: string;
+  workerId: string | null;
+  ffmpegCommand: string;
+  destinations: Array<{ id: number; name: string; platform: string }>;
+  startedAt: string;
+}
+
 interface Channel {
   id: number;
   name: string;
@@ -50,6 +61,7 @@ interface Channel {
   playlist?: { id: number; name: string };
   liveInput?: { id: number; name: string; protocol: string; streamKey: string; ingestUrl: string; status: string };
   destinations?: Array<{ id: number; name: string; platform: string; streamUrl: string }>;
+  activeJob?: ActiveJob | null;
 }
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
@@ -456,6 +468,52 @@ export default function ChannelDetailPage() {
             </Card>
           )}
         </div>
+
+        {channel.activeJob && (
+          <Card className="border-blue-500/30 bg-blue-500/5">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Zap className="w-4 h-4 text-blue-500" />
+                Playout Job #{channel.activeJob.id}
+                <span className={`ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                  channel.activeJob.status === "running" ? "bg-green-500/20 text-green-400" :
+                  channel.activeJob.status === "pending" ? "bg-yellow-500/20 text-yellow-400" :
+                  "bg-gray-500/20 text-gray-400"
+                }`}>
+                  {channel.activeJob.status.toUpperCase()}
+                </span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <p className="text-xs text-muted-foreground">Source</p>
+                  <p className="font-mono text-xs break-all">{channel.activeJob.sourceRef}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Worker</p>
+                  <p className="font-mono text-xs">{channel.activeJob.workerId ?? "Awaiting worker..."}</p>
+                </div>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">Destinations ({(channel.activeJob.destinations as Array<{id:number;name:string;platform:string}>).length})</p>
+                <div className="flex flex-wrap gap-1">
+                  {(channel.activeJob.destinations as Array<{id:number;name:string;platform:string}>).map((d) => (
+                    <span key={d.id} className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-accent/50 font-medium">
+                      {d.platform} - {d.name}
+                    </span>
+                  ))}
+                </div>
+              </div>
+              <details className="text-xs">
+                <summary className="cursor-pointer text-muted-foreground hover:text-foreground">FFmpeg Command</summary>
+                <pre className="mt-1 p-2 bg-black/30 rounded text-green-400 font-mono text-[10px] overflow-x-auto whitespace-pre-wrap break-all">
+                  {channel.activeJob.ffmpegCommand}
+                </pre>
+              </details>
+            </CardContent>
+          </Card>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <Card>

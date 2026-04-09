@@ -102,11 +102,29 @@ router.get("/channels/:id", async (req, res): Promise<void> => {
     .from(destinationsTable)
     .where(eq(destinationsTable.channelId, params.data.id));
 
+  let activeJob = null;
+  if (channel.activeJobId) {
+    const [job] = await db.select().from(playoutJobsTable).where(eq(playoutJobsTable.id, channel.activeJobId));
+    if (job) {
+      activeJob = {
+        id: job.id,
+        status: job.status,
+        sourceMode: job.sourceMode,
+        sourceRef: job.sourceRef,
+        workerId: job.workerId,
+        ffmpegCommand: job.ffmpegCommand,
+        destinations: job.destinations,
+        startedAt: job.startedAt,
+      };
+    }
+  }
+
   res.json({
     ...channel,
     playlist: playlist ?? undefined,
     liveInput: liveInput ?? undefined,
     destinations,
+    activeJob,
   });
 });
 
@@ -172,16 +190,84 @@ router.post("/channels/:id/start", async (req, res): Promise<void> => {
     return;
   }
 
-  const [channel] = await db
-    .update(channelsTable)
-    .set({ status: "on_air" })
-    .where(eq(channelsTable.id, params.data.id))
-    .returning();
-
+  const [channel] = await db.select().from(channelsTable).where(eq(channelsTable.id, params.data.id));
   if (!channel) {
     res.status(404).json({ error: "Channel not found" });
     return;
   }
+
+  if (channel.status === "on_air") {
+    res.status(409).json({ error: "Channel is already on air. Stop it before starting again." });
+    return;
+  }
+
+  const activeDests = await db.select().from(destinationsTable)
+    .where(and(eq(destinationsTable.channelId, channel.id), eq(destinationsTable.isActive, true)));
+
+  if (activeDests.length === 0) {
+    res.status(400).json({ error: "No active destinations assigned to this channel. Add at least one destination before starting." });
+    return;
+  }
+
+  let sourceRef = "";
+  const ingestHost = process.env.INGEST_HOST || "localhost";
+
+  if (channel.sourceMode === "live_input" && channel.activeLiveInputId) {
+    const [liveInput] = await db.select().from(liveInputsTable).where(eq(liveInputsTable.id, channel.activeLiveInputId));
+    if (liveInput) {
+      sourceRef = `rtmp://${ingestHost}/live/${liveInput.streamKey}`;
+    } else {
+      res.status(400).json({ error: "Active live input not found." });
+      return;
+    }
+  } else if (channel.sourceMode === "playlist" && channel.activePlaylistId) {
+    sourceRef = `playlist:${channel.activePlaylistId}`;
+  } else if (channel.sourceMode === "fallback") {
+    sourceRef = "fallback:slate";
+  } else {
+    res.status(400).json({ error: "No source configured. Set a live input or playlist first." });
+    return;
+  }
+
+  const destConfigs = activeDests.map((d) => ({
+    id: d.id,
+    name: d.name,
+    platform: d.platform,
+    streamUrl: d.streamUrl,
+    streamKey: d.streamKey,
+  }));
+
+  const ffmpegOutputArgs = activeDests.flatMap((d) => {
+    const rtmpUrl = `${d.streamUrl}/${d.streamKey}`.replace(/\/+$/, "");
+    return ["-f", "flv", rtmpUrl];
+  });
+
+  const ffmpegCmd = [
+    "ffmpeg", "-hide_banner", "-loglevel", "warning", "-re",
+    "-i", sourceRef,
+    "-c:v", "copy", "-c:a", "copy",
+    ...ffmpegOutputArgs,
+  ].join(" ");
+
+  const workers = await db.select().from(workerNodesTable).where(eq(workerNodesTable.status, "online"));
+  const assignedWorker = workers.length > 0 ? workers[0].workerId : null;
+
+  const [job] = await db.insert(playoutJobsTable).values({
+    channelId: channel.id,
+    workerId: assignedWorker,
+    status: assignedWorker ? "running" : "pending",
+    sourceMode: channel.sourceMode,
+    sourceRef,
+    destinations: destConfigs,
+    ffmpegCommand: ffmpegCmd,
+    startedAt: new Date(),
+  }).returning();
+
+  const [updated] = await db
+    .update(channelsTable)
+    .set({ status: "on_air", activeJobId: job.id })
+    .where(eq(channelsTable.id, channel.id))
+    .returning();
 
   await db.insert(streamSessionsTable).values({
     channelId: channel.id,
@@ -194,10 +280,29 @@ router.post("/channels/:id/start", async (req, res): Promise<void> => {
     action: "channel_started",
     resourceType: "channel",
     resourceId: channel.id,
-    details: { channelName: channel.name },
+    details: {
+      channelName: channel.name,
+      jobId: job.id,
+      sourceRef,
+      destinationCount: activeDests.length,
+      workerAssigned: assignedWorker,
+      ffmpegCommand: ffmpegCmd,
+    },
   });
 
-  res.json(channel);
+  const safeDestConfigs = destConfigs.map(({ streamKey, ...rest }) => rest);
+
+  res.json({
+    ...updated,
+    job: {
+      id: job.id,
+      status: job.status,
+      sourceRef: job.sourceRef,
+      ffmpegCommand: job.ffmpegCommand,
+      workerAssigned: assignedWorker,
+      destinations: safeDestConfigs,
+    },
+  });
 });
 
 router.post("/channels/:id/stop", async (req, res): Promise<void> => {
@@ -207,25 +312,50 @@ router.post("/channels/:id/stop", async (req, res): Promise<void> => {
     return;
   }
 
-  const [channel] = await db
-    .update(channelsTable)
-    .set({ status: "idle" })
-    .where(eq(channelsTable.id, params.data.id))
-    .returning();
-
+  const [channel] = await db.select().from(channelsTable).where(eq(channelsTable.id, params.data.id));
   if (!channel) {
     res.status(404).json({ error: "Channel not found" });
     return;
   }
 
+  const runningJobs = await db.select().from(playoutJobsTable)
+    .where(and(
+      eq(playoutJobsTable.channelId, channel.id),
+      eq(playoutJobsTable.status, "running"),
+    ));
+
+  for (const job of runningJobs) {
+    await db.update(playoutJobsTable)
+      .set({ status: "stopped", stoppedAt: new Date() })
+      .where(eq(playoutJobsTable.id, job.id));
+  }
+
+  const pendingJobs = await db.select().from(playoutJobsTable)
+    .where(and(
+      eq(playoutJobsTable.channelId, channel.id),
+      eq(playoutJobsTable.status, "pending"),
+    ));
+
+  for (const job of pendingJobs) {
+    await db.update(playoutJobsTable)
+      .set({ status: "stopped", stoppedAt: new Date() })
+      .where(eq(playoutJobsTable.id, job.id));
+  }
+
+  const [updated] = await db
+    .update(channelsTable)
+    .set({ status: "idle", activeJobId: null })
+    .where(eq(channelsTable.id, channel.id))
+    .returning();
+
   await db.insert(auditLogsTable).values({
     action: "channel_stopped",
     resourceType: "channel",
     resourceId: channel.id,
-    details: { channelName: channel.name },
+    details: { channelName: channel.name, jobsStopped: runningJobs.length + pendingJobs.length },
   });
 
-  res.json(channel);
+  res.json(updated);
 });
 
 router.post("/channels/:id/switch-source", async (req, res): Promise<void> => {
