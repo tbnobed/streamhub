@@ -136,7 +136,8 @@ export async function getSrsVhosts(): Promise<SrsVhost[]> {
 }
 
 export async function getSrsSummary(): Promise<SrsSummary> {
-  return srsGet<SrsSummary>("/api/v1/summaries");
+  const resp = await srsGet<{ code: number; data: SrsSummary }>("/api/v1/summaries");
+  return resp.data;
 }
 
 export async function getSrsClients(): Promise<SrsClients[]> {
@@ -146,9 +147,9 @@ export async function getSrsClients(): Promise<SrsClients[]> {
 }
 
 export async function getSrsServerInfo(): Promise<{ version: string; uptime: number; pid: number }> {
-  const data = await srsGet<{ code: number; server: { version: string; uptime: number; pid: number } }>("/api/v1/versions");
-  if (data.code !== 0) throw new Error(`SRS error code ${data.code}`);
-  return data.server;
+  const resp = await srsGet<{ code: number; data: { major: number; minor: number; revision: number; version: string } }>("/api/v1/versions");
+  if (resp.code !== 0) throw new Error(`SRS error code ${resp.code}`);
+  return { version: resp.data.version, uptime: 0, pid: 0 };
 }
 
 export interface SrsStreamStatus {

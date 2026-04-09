@@ -24,3 +24,9 @@ expertMode = true
 [postMerge]
 path = "scripts/post-merge.sh"
 timeoutMs = 20000
+
+[userenv]
+
+[userenv.shared]
+INGEST_HOST = "slorg1.obtv.io"
+SRS_API_URL = "http://slorg1.obtv.io:1985"
