@@ -11,6 +11,7 @@ import youtubeRouter from "./youtube";
 import workersRouter from "./workers";
 import monitoringRouter from "./monitoring";
 import logsRouter from "./logs";
+import srsRouter from "./srs";
 
 const router: IRouter = Router();
 
@@ -26,5 +27,6 @@ router.use(youtubeRouter);
 router.use(workersRouter);
 router.use(monitoringRouter);
 router.use(logsRouter);
+router.use(srsRouter);
 
 export default router;

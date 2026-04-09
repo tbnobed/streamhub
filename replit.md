@@ -24,6 +24,8 @@ Port 80 (proxy)
 - Multi-destination restreaming (YouTube, Facebook, Twitch, custom RTMP)
 - YouTube Live integration (OAuth + broadcast scheduling)
 - Stream health monitoring (bitrate, FPS, uptime)
+- SRS ingest server health monitoring (version, uptime, active streams, bitrate, clients)
+- Per-input SRS stream status (live/inactive, bitrate, video codec/resolution, audio codec/sample rate)
 - Worker node management (heartbeat, job polling)
 - Audit logs
 
@@ -71,6 +73,10 @@ All routes under `/api`:
 - `POST /api/workers/heartbeat` — Worker heartbeat
 - `GET /api/workers/jobs` — Worker job polling
 - `POST /api/workers/jobs/:id/status` — Job status update
+- `GET /api/srs/health` — SRS server health status
+- `GET /api/srs/streams` — Active SRS streams
+- `GET /api/srs/clients` — Connected SRS clients
+- `GET /api/srs/input-status` — SRS status matched to live inputs
 - `GET /api/logs/audit` — Audit logs
 
 ## Worker Service
@@ -91,7 +97,8 @@ Located in `worker/`. Runs FFmpeg jobs assigned by the API.
 ## Environment Variables
 - `DATABASE_URL` — PostgreSQL connection string
 - `SESSION_SECRET` — Password hashing secret (required)
-- `INGEST_HOST` — Hostname for RTMP/SRT ingest URL generation
+- `INGEST_HOST` — Hostname for RTMP/SRT ingest URL generation (default: slorg1.obtv.io)
+- `SRS_API_URL` — SRS HTTP API base URL for health monitoring (default: http://{INGEST_HOST}:1985)
 - `YOUTUBE_CLIENT_ID`, `YOUTUBE_CLIENT_SECRET`, `YOUTUBE_REDIRECT_URI` — YouTube OAuth
 - `PORT` — API server port (8080 in dev)
 - `WORKER_ID` — Unique worker identifier

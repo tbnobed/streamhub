@@ -2,13 +2,13 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Radio, Plus, Trash2, Copy, Check } from "lucide-react";
+import { Radio, Plus, Trash2, Copy, Check, Wifi, WifiOff, MonitorPlay, Activity, Server } from "lucide-react";
 import { useState } from "react";
 import { apiBase } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
@@ -21,6 +21,33 @@ interface LiveInput {
   status: string;
   ingestUrl?: string;
   createdAt: string;
+}
+
+interface SrsInputStatus {
+  inputId: number;
+  inputName: string;
+  streamKey: string;
+  protocol: string;
+  srs: {
+    isLive: boolean;
+    bitrate_kbps: number;
+    clients: number;
+    video?: { codec: string; width: number; height: number };
+    audio?: { codec: string; sample_rate: number; channels: number };
+  } | null;
+}
+
+interface SrsHealth {
+  reachable: boolean;
+  version?: string;
+  uptime?: number;
+  cpu_percent?: number;
+  mem_percent?: number;
+  active_streams: number;
+  total_clients: number;
+  total_recv_kbps: number;
+  total_send_kbps: number;
+  error?: string;
 }
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
@@ -55,14 +82,125 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
-function StatusDot({ status }: { status: string }) {
-  const colors: Record<string, string> = {
-    connected: "bg-green-500",
-    active: "bg-green-500",
-    idle: "bg-muted-foreground/40",
-    error: "bg-red-500",
-  };
-  return <span className={`w-2 h-2 rounded-full flex-shrink-0 ${colors[status] ?? "bg-muted-foreground/40"} ${status === "connected" ? "animate-pulse" : ""}`} />;
+function formatUptime(seconds: number): string {
+  const days = Math.floor(seconds / 86400);
+  const hours = Math.floor((seconds % 86400) / 3600);
+  const mins = Math.floor((seconds % 3600) / 60);
+  if (days > 0) return `${days}d ${hours}h`;
+  if (hours > 0) return `${hours}h ${mins}m`;
+  return `${mins}m`;
+}
+
+function formatBitrate(kbps: number): string {
+  if (kbps >= 1000) return `${(kbps / 1000).toFixed(1)} Mbps`;
+  return `${Math.round(kbps)} kbps`;
+}
+
+function SrsHealthCard({ health }: { health: SrsHealth }) {
+  return (
+    <Card className="border-border/50">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-sm font-medium flex items-center gap-2">
+          <Server className="w-4 h-4" />
+          SRS Ingest Server
+          {health.reachable ? (
+            <Badge variant="default" className="ml-auto bg-green-600 text-xs">Online</Badge>
+          ) : (
+            <Badge variant="destructive" className="ml-auto text-xs">Unreachable</Badge>
+          )}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="pt-0">
+        {health.reachable ? (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+            <div>
+              <div className="text-muted-foreground text-xs">Version</div>
+              <div className="font-mono font-medium">{health.version ?? "—"}</div>
+            </div>
+            <div>
+              <div className="text-muted-foreground text-xs">Uptime</div>
+              <div className="font-medium">{health.uptime ? formatUptime(health.uptime) : "—"}</div>
+            </div>
+            <div>
+              <div className="text-muted-foreground text-xs">Active Streams</div>
+              <div className="font-medium">{health.active_streams}</div>
+            </div>
+            <div>
+              <div className="text-muted-foreground text-xs">Total Ingest</div>
+              <div className="font-medium">{formatBitrate(health.total_recv_kbps)}</div>
+            </div>
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            Cannot reach SRS API.{" "}
+            {health.error && <span className="text-destructive">{health.error}</span>}
+          </p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function StreamStatusBadge({ srs }: { srs: SrsInputStatus["srs"] }) {
+  if (!srs) {
+    return (
+      <div className="flex items-center gap-1.5 text-muted-foreground">
+        <WifiOff className="w-3.5 h-3.5" />
+        <span className="text-xs">No stream</span>
+      </div>
+    );
+  }
+
+  if (!srs.isLive) {
+    return (
+      <div className="flex items-center gap-1.5 text-muted-foreground">
+        <WifiOff className="w-3.5 h-3.5" />
+        <span className="text-xs">Inactive</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-1.5 text-green-500">
+      <Wifi className="w-3.5 h-3.5 animate-pulse" />
+      <span className="text-xs font-medium">Live</span>
+    </div>
+  );
+}
+
+function StreamDetails({ srs }: { srs: NonNullable<SrsInputStatus["srs"]> }) {
+  if (!srs.isLive) return null;
+
+  return (
+    <div className="mt-3 rounded-md bg-green-500/5 border border-green-500/20 p-3">
+      <div className="flex items-center gap-2 mb-2">
+        <Activity className="w-3.5 h-3.5 text-green-500" />
+        <span className="text-xs font-medium text-green-400">Stream Active</span>
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+        <div>
+          <span className="text-muted-foreground">Bitrate</span>
+          <div className="font-mono font-medium">{formatBitrate(srs.bitrate_kbps)}</div>
+        </div>
+        <div>
+          <span className="text-muted-foreground">Clients</span>
+          <div className="font-mono font-medium">{srs.clients}</div>
+        </div>
+        {srs.video && (
+          <div>
+            <span className="text-muted-foreground">Video</span>
+            <div className="font-mono font-medium">{srs.video.codec} {srs.video.width}×{srs.video.height}</div>
+          </div>
+        )}
+        {srs.audio && (
+          <div>
+            <span className="text-muted-foreground">Audio</span>
+            <div className="font-mono font-medium">{srs.audio.codec} {srs.audio.sample_rate / 1000}kHz</div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 export default function LiveInputsPage() {
@@ -76,6 +214,20 @@ export default function LiveInputsPage() {
     queryFn: () => apiFetch("/live-inputs"),
     refetchInterval: 10000,
   });
+
+  const { data: srsHealth } = useQuery<SrsHealth>({
+    queryKey: ["srs-health"],
+    queryFn: () => apiFetch("/srs/health"),
+    refetchInterval: 15000,
+  });
+
+  const { data: inputStatuses = [] } = useQuery<SrsInputStatus[]>({
+    queryKey: ["srs-input-status"],
+    queryFn: () => apiFetch("/srs/input-status"),
+    refetchInterval: 5000,
+  });
+
+  const srsStatusMap = new Map(inputStatuses.map((s) => [s.inputId, s]));
 
   const createMutation = useMutation({
     mutationFn: (body: typeof form) => apiFetch<LiveInput>("/live-inputs", { method: "POST", body: JSON.stringify(body) }),
@@ -107,6 +259,8 @@ export default function LiveInputsPage() {
           </Button>
         </div>
 
+        {srsHealth && <SrsHealthCard health={srsHealth} />}
+
         {isLoading && <div className="flex justify-center py-20"><Spinner className="size-8" /></div>}
 
         {!isLoading && inputs.length === 0 && (
@@ -119,48 +273,53 @@ export default function LiveInputsPage() {
         )}
 
         <div className="grid gap-4">
-          {inputs.map((input) => (
-            <Card key={input.id}>
-              <CardContent className="p-5">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-lg bg-accent flex items-center justify-center flex-shrink-0">
-                      <Radio className="w-5 h-5 text-primary" />
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <StatusDot status={input.status} />
-                        <span className="font-semibold">{input.name}</span>
-                        <Badge variant="outline" className="text-xs uppercase">{input.protocol}</Badge>
+          {inputs.map((input) => {
+            const srsStatus = srsStatusMap.get(input.id);
+            return (
+              <Card key={input.id}>
+                <CardContent className="p-5">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 rounded-lg bg-accent flex items-center justify-center flex-shrink-0">
+                        {srsStatus?.srs?.isLive ? (
+                          <MonitorPlay className="w-5 h-5 text-green-500" />
+                        ) : (
+                          <Radio className="w-5 h-5 text-primary" />
+                        )}
                       </div>
-                      {input.ingestUrl && (
-                        <div className="mt-2 space-y-1">
-                          <div className="text-xs text-muted-foreground">Ingest URL</div>
-                          <div className="flex items-center gap-2 bg-muted rounded px-2 py-1">
-                            <code className="text-xs flex-1 truncate">{input.ingestUrl}</code>
-                            <CopyButton text={input.ingestUrl} />
-                          </div>
-                          <div className="text-xs text-muted-foreground mt-1">Stream Key</div>
-                          <div className="flex items-center gap-2 bg-muted rounded px-2 py-1">
-                            <code className="text-xs flex-1 font-mono">{input.streamKey}</code>
-                            <CopyButton text={input.streamKey} />
-                          </div>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold">{input.name}</span>
+                          <Badge variant="outline" className="text-xs uppercase">{input.protocol}</Badge>
+                          <StreamStatusBadge srs={srsStatus?.srs ?? null} />
                         </div>
-                      )}
+                        {input.ingestUrl && (
+                          <div className="mt-2 space-y-1">
+                            <div className="text-xs text-muted-foreground">Ingest URL</div>
+                            <div className="flex items-center gap-2 bg-muted rounded px-2 py-1">
+                              <code className="text-xs flex-1 truncate">{input.ingestUrl}</code>
+                              <CopyButton text={input.ingestUrl} />
+                            </div>
+                            <div className="text-xs text-muted-foreground mt-1">Stream Key</div>
+                            <div className="flex items-center gap-2 bg-muted rounded px-2 py-1">
+                              <code className="text-xs flex-1 font-mono">{input.streamKey}</code>
+                              <CopyButton text={input.streamKey} />
+                            </div>
+                          </div>
+                        )}
+                        {srsStatus?.srs && <StreamDetails srs={srsStatus.srs} />}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button size="icon" variant="ghost" onClick={() => { if (confirm("Delete input?")) deleteMutation.mutate(input.id); }}>
+                        <Trash2 className="w-4 h-4 text-muted-foreground" />
+                      </Button>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Badge variant={input.status === "connected" ? "default" : "secondary"} className="capitalize">
-                      {input.status}
-                    </Badge>
-                    <Button size="icon" variant="ghost" onClick={() => { if (confirm("Delete input?")) deleteMutation.mutate(input.id); }}>
-                      <Trash2 className="w-4 h-4 text-muted-foreground" />
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       </div>
 

@@ -12,9 +12,39 @@ import {
   Activity,
   AlertTriangle,
   CheckCircle2,
+  Server,
+  Wifi,
+  WifiOff,
 } from "lucide-react";
 import { Link } from "wouter";
 import { apiBase } from "@/lib/api";
+
+interface SrsHealth {
+  reachable: boolean;
+  version?: string;
+  uptime?: number;
+  cpu_percent?: number;
+  mem_percent?: number;
+  active_streams: number;
+  total_clients: number;
+  total_recv_kbps: number;
+  total_send_kbps: number;
+  error?: string;
+}
+
+function formatUptime(seconds: number): string {
+  const days = Math.floor(seconds / 86400);
+  const hours = Math.floor((seconds % 86400) / 3600);
+  const mins = Math.floor((seconds % 3600) / 60);
+  if (days > 0) return `${days}d ${hours}h`;
+  if (hours > 0) return `${hours}h ${mins}m`;
+  return `${mins}m`;
+}
+
+function formatBitrate(kbps: number): string {
+  if (kbps >= 1000) return `${(kbps / 1000).toFixed(1)} Mbps`;
+  return `${Math.round(kbps)} kbps`;
+}
 
 interface ChannelSummary {
   id: number;
@@ -114,6 +144,18 @@ export default function DashboardPage() {
     refetchInterval: 10_000,
   });
 
+  const { data: srsHealth } = useQuery<SrsHealth>({
+    queryKey: ["srs-health"],
+    queryFn: async () => {
+      const token = localStorage.getItem("auth_token");
+      const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+      const res = await fetch(`${apiBase()}/srs/health`, { headers });
+      if (!res.ok) throw new Error("Failed to fetch SRS health");
+      return res.json();
+    },
+    refetchInterval: 15_000,
+  });
+
   return (
     <AppShell>
       <div className="space-y-6">
@@ -177,6 +219,59 @@ export default function DashboardPage() {
                 accent={data.stats.workers.online === 0 && data.stats.workers.total > 0 ? "text-red-500" : ""}
               />
             </div>
+
+            {/* SRS Ingest Server */}
+            {srsHealth && (
+              <Card className="border-border/50">
+                <CardHeader className="flex flex-row items-center justify-between pb-3">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Server className="w-4 h-4" />
+                    SRS Ingest Server
+                  </CardTitle>
+                  {srsHealth.reachable ? (
+                    <div className="flex items-center gap-1.5 text-green-500 text-xs">
+                      <Wifi className="w-3.5 h-3.5" />
+                      <span>Online</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1.5 text-destructive text-xs">
+                      <WifiOff className="w-3.5 h-3.5" />
+                      <span>Unreachable</span>
+                    </div>
+                  )}
+                </CardHeader>
+                <CardContent className="pt-0">
+                  {srsHealth.reachable ? (
+                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 text-sm">
+                      <div>
+                        <div className="text-muted-foreground text-xs">Version</div>
+                        <div className="font-mono font-medium">{srsHealth.version ?? "—"}</div>
+                      </div>
+                      <div>
+                        <div className="text-muted-foreground text-xs">Uptime</div>
+                        <div className="font-medium">{srsHealth.uptime ? formatUptime(srsHealth.uptime) : "—"}</div>
+                      </div>
+                      <div>
+                        <div className="text-muted-foreground text-xs">Active Streams</div>
+                        <div className="font-medium">{srsHealth.active_streams}</div>
+                      </div>
+                      <div>
+                        <div className="text-muted-foreground text-xs">Total Ingest</div>
+                        <div className="font-medium">{formatBitrate(srsHealth.total_recv_kbps)}</div>
+                      </div>
+                      <div>
+                        <div className="text-muted-foreground text-xs">Clients</div>
+                        <div className="font-medium">{srsHealth.total_clients}</div>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      Cannot reach SRS API. Check your SRS server configuration.
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            )}
 
             {/* Channels list */}
             <Card>
