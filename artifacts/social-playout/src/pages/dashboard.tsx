@@ -79,7 +79,7 @@ async function fetchDashboard(): Promise<{ channels: ChannelSummary[]; stats: Da
   const liveInputs: Array<{ status: string }> = liveInputsRes.ok ? await liveInputsRes.json() : [];
   const workers: Array<{ status: string }> = workersRes.ok ? await workersRes.json() : [];
 
-  const live = channels.filter((c) => c.status === "live").length;
+  const live = channels.filter((c) => c.status === "on_air" || c.status === "live").length;
   const connected = liveInputs.filter((i) => i.status === "connected").length;
   const online = workers.filter((w) => w.status === "online").length;
 
@@ -96,7 +96,7 @@ async function fetchDashboard(): Promise<{ channels: ChannelSummary[]; stats: Da
 }
 
 function StatusBadge({ status }: { status: string }) {
-  if (status === "live") return <Badge className="bg-red-500 text-white animate-pulse">LIVE</Badge>;
+  if (status === "on_air" || status === "live") return <Badge className="bg-red-500 text-white animate-pulse">ON AIR</Badge>;
   if (status === "starting") return <Badge className="bg-yellow-500 text-black">Starting</Badge>;
   if (status === "stopping") return <Badge className="bg-orange-500 text-white">Stopping</Badge>;
   return <Badge variant="secondary">{status}</Badge>;
@@ -301,7 +301,7 @@ export default function DashboardPage() {
                           <div className="flex items-center gap-3">
                             <div
                               className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                                ch.status === "live"
+                                ch.status === "on_air" || ch.status === "live"
                                   ? "bg-red-500 animate-pulse"
                                   : ch.status === "starting"
                                   ? "bg-yellow-500"
@@ -317,7 +317,7 @@ export default function DashboardPage() {
                           </div>
                           <div className="flex items-center gap-2">
                             <StatusBadge status={ch.status} />
-                            {ch.status === "live" ? (
+                            {ch.status === "on_air" || ch.status === "live" ? (
                               <CheckCircle2 className="w-4 h-4 text-green-500" />
                             ) : null}
                           </div>

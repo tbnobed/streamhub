@@ -53,13 +53,15 @@ function StatusBadge({ status }: { status: string }) {
     live: "bg-red-500 text-white",
     starting: "bg-yellow-500 text-black",
     stopping: "bg-orange-500 text-white",
+    on_air: "bg-red-500 text-white",
     idle: "bg-secondary text-secondary-foreground",
     error: "bg-destructive text-destructive-foreground",
   };
+  const label = status === "on_air" ? "ON AIR" : status.toUpperCase();
   return (
     <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold ${colors[status] ?? "bg-secondary text-secondary-foreground"}`}>
-      {status === "live" && <span className="w-1.5 h-1.5 rounded-full bg-white mr-1.5 animate-pulse" />}
-      {status.toUpperCase()}
+      {(status === "on_air" || status === "live") && <span className="w-1.5 h-1.5 rounded-full bg-white mr-1.5 animate-pulse" />}
+      {label}
     </span>
   );
 }
@@ -140,8 +142,8 @@ export default function ChannelsPage() {
               <CardContent className="p-5">
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex items-center gap-4 min-w-0">
-                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${ch.status === "live" ? "bg-red-500/20" : "bg-primary/10"}`}>
-                      <Tv2 className={`w-5 h-5 ${ch.status === "live" ? "text-red-500" : "text-primary"}`} />
+                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${ch.status === "on_air" || ch.status === "live" ? "bg-red-500/20" : "bg-primary/10"}`}>
+                      <Tv2 className={`w-5 h-5 ${ch.status === "on_air" || ch.status === "live" ? "text-red-500" : "text-primary"}`} />
                     </div>
                     <div className="min-w-0">
                       <Link href={`/channels/${ch.id}`}>
@@ -157,7 +159,7 @@ export default function ChannelsPage() {
                         <Play className="w-3.5 h-3.5 mr-1.5" />
                         Start
                       </Button>
-                    ) : ch.status === "live" || ch.status === "starting" ? (
+                    ) : ch.status === "on_air" || ch.status === "live" || ch.status === "starting" ? (
                       <Button size="sm" variant="destructive" onClick={() => stopMutation.mutate(ch.id)} disabled={stopMutation.isPending}>
                         <Square className="w-3.5 h-3.5 mr-1.5" />
                         Stop

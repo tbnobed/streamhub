@@ -84,16 +84,18 @@ function CopyButton({ text }: { text: string }) {
 
 function StatusBadge({ status }: { status: string }) {
   const colors: Record<string, string> = {
+    on_air: "bg-red-500 text-white",
     live: "bg-red-500 text-white",
     starting: "bg-yellow-500 text-black",
     stopping: "bg-orange-500 text-white",
     idle: "bg-secondary text-secondary-foreground",
     error: "bg-destructive text-destructive-foreground",
   };
+  const label = status === "on_air" ? "ON AIR" : status.toUpperCase();
   return (
     <span className={`inline-flex items-center px-2.5 py-1 rounded text-xs font-semibold ${colors[status] ?? "bg-secondary text-secondary-foreground"}`}>
-      {status === "live" && <span className="w-1.5 h-1.5 rounded-full bg-white mr-1.5 animate-pulse" />}
-      {status.toUpperCase()}
+      {(status === "on_air" || status === "live") && <span className="w-1.5 h-1.5 rounded-full bg-white mr-1.5 animate-pulse" />}
+      {label}
     </span>
   );
 }
@@ -366,9 +368,9 @@ export default function ChannelDetailPage() {
     );
   }
 
-  const isLive = channel.status === "live";
+  const isLive = channel.status === "on_air" || channel.status === "live";
   const canStart = channel.status === "idle" || channel.status === "error";
-  const canStop = channel.status === "live" || channel.status === "starting";
+  const canStop = isLive || channel.status === "starting";
 
   return (
     <AppShell>
