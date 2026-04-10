@@ -1,0 +1,12 @@
+**/node_modules
+**/dist
+**/.vite
+**/.tsbuildinfo
+.git
+.local
+attached_assets
+artifacts/mockup-sandbox
+*.md
+.env*
+.replit
+replit.nix

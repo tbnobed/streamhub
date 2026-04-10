@@ -92,12 +92,22 @@ Located in `worker/`. Runs FFmpeg jobs assigned by the API.
 - **Per-destination health**: Each output reports its own status (connected/connecting/error) via `destinationHealth` JSONB field. Frontend shows per-destination status cards with green/yellow/red indicators.
 
 ## Deployment (Docker)
-- `docker-compose.yml` — Full stack: postgres, redis, api, web, worker, nginx
-- `Dockerfile.api` — API server container
-- `Dockerfile.web` — Frontend container (Nginx)
-- `worker/Dockerfile` — Worker container (FFmpeg + Node.js)
-- `nginx.conf` — Reverse proxy config
-- `.env.example` — Environment variable template
+All deployment files live in `deploy/`:
+- `deploy/deploy.sh` — One-command deployment for clean Ubuntu servers (installs Docker, builds, migrates DB, starts)
+- `deploy/update.sh` — Quick rebuild and redeploy after code changes
+- `deploy/docker-compose.yml` — Full stack: postgres, api, frontend (nginx), worker
+- `deploy/Dockerfile` — Multi-stage build (api, frontend, worker targets)
+- `deploy/nginx.conf` — Reverse proxy: serves frontend static files, proxies `/api/` to API container
+- `deploy/.env.example` — Environment variable template (auto-generates secrets on first deploy)
+- `.dockerignore` — Build context exclusions
+
+Usage on clean Ubuntu:
+```bash
+git clone <repo-url> social-playout && cd social-playout
+sudo bash deploy/deploy.sh          # first run: installs Docker, builds, starts
+sudo bash deploy/deploy.sh --env-only  # just generate .env, edit before full deploy
+sudo bash deploy/update.sh          # redeploy after code changes
+```
 
 ## Environment Variables
 - `DATABASE_URL` — PostgreSQL connection string
