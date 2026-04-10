@@ -36,7 +36,7 @@ export default function LoginPage() {
       <div className="w-full max-w-sm space-y-6">
         <div className="text-center space-y-2">
           <img src="/logo.png" alt="OBR" className="w-32 h-32 rounded-2xl mx-auto object-contain" />
-          <h1 className="text-2xl font-bold">Social Playout Manager</h1>
+          <h1 className="text-2xl font-bold">Media Playout Manager</h1>
           <p className="text-muted-foreground text-sm">Streaming Operations Center</p>
         </div>
 
