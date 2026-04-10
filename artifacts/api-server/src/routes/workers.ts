@@ -142,6 +142,18 @@ router.post("/workers/jobs/:id/status", async (req, res): Promise<void> => {
     .set(updates)
     .where(eq(playoutJobsTable.id, params.data.id));
 
+  if (["failed", "completed"].includes(parsed.data.status) && existingJob.channelId) {
+    await db
+      .update(channelsTable)
+      .set({ status: "idle", activeJobId: null })
+      .where(
+        and(
+          eq(channelsTable.id, existingJob.channelId),
+          eq(channelsTable.activeJobId, existingJob.id),
+        )
+      );
+  }
+
   res.json({ ok: true });
 });
 
