@@ -74,8 +74,8 @@ export default function YouTubePage() {
   });
 
   const connectMutation = useMutation({
-    mutationFn: () => apiFetch<{ authUrl: string }>("/youtube/auth/url"),
-    onSuccess: (data) => { window.open(data.authUrl, "_blank"); },
+    mutationFn: () => apiFetch<{ url: string }>("/youtube/auth-url"),
+    onSuccess: (data) => { window.open(data.url, "_blank"); },
     onError: (e: Error) => toast({ variant: "destructive", title: "Error", description: e.message }),
   });
 
