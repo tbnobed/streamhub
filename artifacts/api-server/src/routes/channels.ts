@@ -3,6 +3,7 @@ import { db } from "@workspace/db";
 import {
   channelsTable,
   playlistsTable,
+  playlistItemsTable,
   liveInputsTable,
   destinationsTable,
   playoutJobsTable,
@@ -11,7 +12,7 @@ import {
   streamSessionsTable,
   auditLogsTable,
 } from "@workspace/db";
-import { eq, count, and } from "drizzle-orm";
+import { eq, count, and, asc } from "drizzle-orm";
 import {
   CreateChannelBody,
   GetChannelParams,
@@ -224,7 +225,25 @@ router.post("/channels/:id/start", async (req, res): Promise<void> => {
       return;
     }
   } else if (channel.sourceMode === "playlist" && channel.activePlaylistId) {
-    sourceRef = `playlist:${channel.activePlaylistId}`;
+    const playlistItems = await db
+      .select({
+        assetFilePath: assetsTable.filePath,
+      })
+      .from(playlistItemsTable)
+      .leftJoin(assetsTable, eq(playlistItemsTable.assetId, assetsTable.id))
+      .where(eq(playlistItemsTable.playlistId, channel.activePlaylistId))
+      .orderBy(asc(playlistItemsTable.position));
+
+    const filePaths = playlistItems
+      .map((item) => item.assetFilePath)
+      .filter((fp): fp is string => !!fp);
+
+    if (filePaths.length === 0) {
+      res.status(400).json({ error: "Playlist has no assets with valid file paths. Add media files to the playlist first." });
+      return;
+    }
+
+    sourceRef = filePaths.join(",");
   } else if (channel.sourceMode === "fallback") {
     sourceRef = "fallback:slate";
   } else {

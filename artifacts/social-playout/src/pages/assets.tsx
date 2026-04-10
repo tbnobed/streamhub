@@ -7,12 +7,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
+import { Progress } from "@/components/ui/progress";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Film, Plus, Trash2, FileVideoCamera, Image, Music } from "lucide-react";
-import { useState } from "react";
+import { Film, Plus, Trash2, Upload, Image, Music, FileVideo } from "lucide-react";
+import { useState, useRef } from "react";
 import { apiBase } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 
@@ -48,7 +49,7 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
 function AssetIcon({ type }: { type: string }) {
   if (type === "image") return <Image className="w-5 h-5 text-blue-400" />;
   if (type === "audio") return <Music className="w-5 h-5 text-green-400" />;
-  return <FileVideoCamera className="w-5 h-5 text-purple-400" />;
+  return <FileVideo className="w-5 h-5 text-purple-400" />;
 }
 
 function formatBytes(bytes?: number): string {
@@ -65,10 +66,18 @@ function formatDuration(secs?: number): string {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
+function detectMediaType(mime: string): string {
+  if (mime.startsWith("video/")) return "video";
+  if (mime.startsWith("audio/")) return "audio";
+  if (mime.startsWith("image/")) return "image";
+  return "video";
+}
+
 export default function AssetsPage() {
   const qc = useQueryClient();
   const { toast } = useToast();
   const [createOpen, setCreateOpen] = useState(false);
+  const [uploadOpen, setUploadOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [form, setForm] = useState({
     name: "",
@@ -77,6 +86,11 @@ export default function AssetsPage() {
     duration: "",
     description: "",
   });
+
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadFileName, setUploadFileName] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: assets = [], isLoading } = useQuery<Asset[]>({
     queryKey: ["assets"],
@@ -100,6 +114,80 @@ export default function AssetsPage() {
     onError: (e: Error) => toast({ variant: "destructive", title: "Error", description: e.message }),
   });
 
+  async function handleFileUpload(file: File) {
+    setUploading(true);
+    setUploadProgress(0);
+    setUploadFileName(file.name);
+
+    try {
+      const urlRes = await apiFetch<{ uploadURL: string; objectPath: string }>(
+        "/storage/uploads/request-url",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            name: file.name,
+            size: file.size,
+            contentType: file.type,
+          }),
+        }
+      );
+
+      await new Promise<void>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("PUT", urlRes.uploadURL, true);
+        xhr.setRequestHeader("Content-Type", file.type);
+
+        xhr.upload.addEventListener("progress", (e) => {
+          if (e.lengthComputable) {
+            setUploadProgress(Math.round((e.loaded / e.total) * 100));
+          }
+        });
+
+        xhr.addEventListener("load", () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            resolve();
+          } else {
+            reject(new Error(`Upload failed: ${xhr.status}`));
+          }
+        });
+
+        xhr.addEventListener("error", () => reject(new Error("Upload failed")));
+        xhr.send(file);
+      });
+
+      const servingUrl = `${apiBase()}/storage${urlRes.objectPath}`;
+      const mediaType = detectMediaType(file.type);
+      const nameWithoutExt = file.name.replace(/\.[^/.]+$/, "");
+
+      await apiFetch("/assets", {
+        method: "POST",
+        body: JSON.stringify({
+          name: nameWithoutExt,
+          type: mediaType,
+          filePath: servingUrl,
+          filename: file.name,
+          fileSize: file.size,
+          mimeType: file.type,
+        }),
+      });
+
+      qc.invalidateQueries({ queryKey: ["assets"] });
+      setUploadOpen(false);
+      toast({ title: "Asset uploaded", description: file.name });
+    } catch (e) {
+      toast({
+        variant: "destructive",
+        title: "Upload failed",
+        description: e instanceof Error ? e.message : "Unknown error",
+      });
+    } finally {
+      setUploading(false);
+      setUploadProgress(0);
+      setUploadFileName("");
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
   const filtered = assets.filter((a) =>
     a.name.toLowerCase().includes(search.toLowerCase())
   );
@@ -112,9 +200,14 @@ export default function AssetsPage() {
             <h1 className="text-2xl font-bold">Asset Library</h1>
             <p className="text-muted-foreground text-sm mt-1">{assets.length} assets registered</p>
           </div>
-          <Button onClick={() => setCreateOpen(true)}>
-            <Plus className="w-4 h-4 mr-2" />Register Asset
-          </Button>
+          <div className="flex gap-2">
+            <Button onClick={() => setUploadOpen(true)} variant="default">
+              <Upload className="w-4 h-4 mr-2" />Upload File
+            </Button>
+            <Button onClick={() => setCreateOpen(true)} variant="outline">
+              <Plus className="w-4 h-4 mr-2" />Register Path
+            </Button>
+          </div>
         </div>
 
         <div className="flex gap-3">
@@ -132,7 +225,7 @@ export default function AssetsPage() {
           <Card>
             <CardContent className="py-16 text-center">
               <Film className="w-12 h-12 mx-auto mb-3 text-muted-foreground/30" />
-              <p className="text-muted-foreground">No assets found. Register a media file to get started.</p>
+              <p className="text-muted-foreground">No assets found. Upload a media file to get started.</p>
             </CardContent>
           </Card>
         )}
@@ -169,9 +262,56 @@ export default function AssetsPage() {
         </div>
       </div>
 
+      <Dialog open={uploadOpen} onOpenChange={(open) => { if (!uploading) setUploadOpen(open); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Upload Media File</DialogTitle>
+            <DialogDescription>Select a video, audio, or image file to upload to your asset library.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            {uploading ? (
+              <div className="space-y-3 py-4">
+                <div className="text-sm text-muted-foreground text-center">{uploadFileName}</div>
+                <Progress value={uploadProgress} className="h-2" />
+                <div className="text-xs text-muted-foreground text-center">{uploadProgress}% uploaded</div>
+              </div>
+            ) : (
+              <div
+                className="border-2 border-dashed border-border rounded-lg p-8 text-center cursor-pointer hover:border-primary/50 transition-colors"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <Upload className="w-10 h-10 mx-auto mb-3 text-muted-foreground/40" />
+                <p className="text-sm font-medium">Click to select a file</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  MP4, MOV, MKV, MP3, WAV, JPG, PNG — up to 500 MB
+                </p>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  className="hidden"
+                  accept="video/*,audio/*,image/*,.mp4,.mov,.mkv,.avi,.mp3,.wav,.flac,.jpg,.jpeg,.png,.bmp"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleFileUpload(file);
+                  }}
+                />
+              </div>
+            )}
+          </div>
+          {!uploading && (
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setUploadOpen(false)}>Cancel</Button>
+            </DialogFooter>
+          )}
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Register Asset</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>Register Asset</DialogTitle>
+            <DialogDescription>Register an existing file on the server by its path.</DialogDescription>
+          </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-2">
               <Label>Name</Label>

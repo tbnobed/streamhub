@@ -1089,3 +1089,14 @@ export const ListWorkerEventsResponseItem = zod.object({
   createdAt: zod.coerce.date(),
 });
 export const ListWorkerEventsResponse = zod.array(ListWorkerEventsResponseItem);
+
+export const RequestUploadUrlBody = zod.object({
+  name: zod.string(),
+  size: zod.number(),
+  contentType: zod.string(),
+});
+
+export const RequestUploadUrlResponse = zod.object({
+  uploadURL: zod.string(),
+  objectPath: zod.string(),
+});

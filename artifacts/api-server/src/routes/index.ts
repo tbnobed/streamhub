@@ -12,10 +12,12 @@ import workersRouter from "./workers";
 import monitoringRouter from "./monitoring";
 import logsRouter from "./logs";
 import srsRouter from "./srs";
+import storageRouter from "./storage";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
+router.use(storageRouter);
 router.use(authRouter);
 router.use(usersRouter);
 router.use(assetsRouter);
