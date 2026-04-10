@@ -48,8 +48,8 @@ export function AppShell({ children }: AppShellProps) {
         )}
       >
         {/* Logo */}
-        <div className="h-16 px-6 flex items-center gap-3 border-b border-border">
-          <img src="/logo.png" alt="OBR" className="w-8 h-8 rounded-lg object-contain" />
+        <div className="h-20 px-6 flex items-center gap-3 border-b border-border">
+          <img src="/logo.png" alt="OBR" className="w-16 h-16 rounded-lg object-contain" />
           <div>
             <div className="font-bold text-sm leading-none">Media Playout</div>
             <div className="text-xs text-muted-foreground leading-none mt-1">Operations Center</div>
