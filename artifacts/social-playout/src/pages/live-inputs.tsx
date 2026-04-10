@@ -293,9 +293,9 @@ function FlvPreview({ streamKey }: { streamKey: string }) {
   }, [flvUrl]);
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="flex flex-col max-h-[280px]">
       {!error ? (
-        <div className="flex-1 bg-black rounded-lg overflow-hidden min-h-0">
+        <div className="bg-black rounded-lg overflow-hidden min-h-0 flex-1">
           <video
             ref={videoRef}
             className="w-full h-full object-contain"
@@ -305,13 +305,13 @@ function FlvPreview({ streamKey }: { streamKey: string }) {
           />
         </div>
       ) : (
-        <div className="flex-1 bg-muted/30 rounded-lg flex flex-col items-center justify-center gap-2 min-h-[120px]">
+        <div className="bg-muted/30 rounded-lg flex flex-col items-center justify-center gap-2 min-h-[120px] flex-1">
           <MonitorPlay className="w-8 h-8 text-muted-foreground/20" />
           <p className="text-xs text-muted-foreground">{error}</p>
         </div>
       )}
       {flvUrl && (
-        <div className="mt-1.5 text-xs text-muted-foreground bg-muted rounded px-2 py-1 flex items-center gap-2">
+        <div className="mt-1.5 text-xs text-muted-foreground bg-muted rounded px-2 py-1 flex items-center gap-2 flex-shrink-0">
           <code className="truncate flex-1">{flvUrl}</code>
           <CopyButton text={flvUrl} />
         </div>
@@ -395,7 +395,7 @@ export default function LiveInputsPage() {
             return (
               <Card key={input.id}>
                 <CardContent className="p-5">
-                  <div className="grid grid-cols-[3fr_2fr] gap-5 items-stretch">
+                  <div className="grid grid-cols-[3fr_2fr] gap-5">
                     <div className="flex flex-col">
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex items-center gap-3">
