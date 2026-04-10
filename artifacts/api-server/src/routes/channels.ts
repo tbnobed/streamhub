@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { ObjectStorageService } from "../lib/objectStorage";
+import { LocalStorageService } from "../lib/objectStorage";
 import {
   channelsTable,
   playlistsTable,
@@ -244,13 +244,13 @@ router.post("/channels/:id/start", async (req, res): Promise<void> => {
       return;
     }
 
-    const storageService = new ObjectStorageService();
+    const storageService = new LocalStorageService();
     const filePaths: string[] = [];
     for (const fp of rawPaths) {
       if (fp.startsWith("/api/storage/objects/")) {
         const objectPath = fp.replace("/api/storage", "");
-        const signedUrl = await storageService.getSignedDownloadURL(objectPath, 7200);
-        filePaths.push(signedUrl);
+        const absPath = storageService.getAbsolutePath(objectPath);
+        filePaths.push(absPath);
       } else {
         filePaths.push(fp);
       }

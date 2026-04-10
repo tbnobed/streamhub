@@ -1,125 +1,81 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { Readable } from "stream";
 import {
-  RequestUploadUrlBody,
-  RequestUploadUrlResponse,
-} from "@workspace/api-zod";
-import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
-import { ObjectPermission } from "../lib/objectAcl";
+  LocalStorageService,
+  ObjectNotFoundError,
+  getUploadsSubdir,
+  ensureDir,
+  generateUploadFilename,
+} from "../lib/objectStorage";
+import multer from "multer";
+import { createReadStream } from "fs";
 
 const router: IRouter = Router();
-const objectStorageService = new ObjectStorageService();
+const storageService = new LocalStorageService();
 
-/**
- * POST /storage/uploads/request-url
- *
- * Request a presigned URL for file upload.
- * The client sends JSON metadata (name, size, contentType) — NOT the file.
- * Then uploads the file directly to the returned presigned URL.
- */
-router.post("/storage/uploads/request-url", async (req: Request, res: Response) => {
-  const parsed = RequestUploadUrlBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: "Missing or invalid required fields" });
-    return;
-  }
-
-  try {
-    const { name, size, contentType } = parsed.data;
-
-    const uploadURL = await objectStorageService.getObjectEntityUploadURL();
-    const objectPath = objectStorageService.normalizeObjectEntityPath(uploadURL);
-
-    res.json(
-      RequestUploadUrlResponse.parse({
-        uploadURL,
-        objectPath,
-        metadata: { name, size, contentType },
-      }),
-    );
-  } catch (error) {
-    req.log.error({ err: error }, "Error generating upload URL");
-    res.status(500).json({ error: "Failed to generate upload URL" });
-  }
+const diskStorage = multer.diskStorage({
+  destination: async (_req, _file, cb) => {
+    const dir = getUploadsSubdir();
+    await ensureDir(dir);
+    cb(null, dir);
+  },
+  filename: (_req, file, cb) => {
+    cb(null, generateUploadFilename(file.originalname));
+  },
 });
 
-/**
- * GET /storage/public-objects/*
- *
- * Serve public assets from PUBLIC_OBJECT_SEARCH_PATHS.
- * These are unconditionally public — no authentication or ACL checks.
- * IMPORTANT: Always provide this endpoint when object storage is set up.
- */
-router.get("/storage/public-objects/*filePath", async (req: Request, res: Response) => {
+const upload = multer({
+  storage: diskStorage,
+  limits: { fileSize: 5 * 1024 * 1024 * 1024 },
+});
+
+router.post("/storage/upload", upload.single("file"), async (req: Request, res: Response) => {
   try {
-    const raw = req.params.filePath;
-    const filePath = Array.isArray(raw) ? raw.join("/") : raw;
-    const file = await objectStorageService.searchPublicObject(filePath);
-    if (!file) {
-      res.status(404).json({ error: "File not found" });
+    if (!req.file) {
+      res.status(400).json({ error: "No file provided" });
       return;
     }
 
-    const response = await objectStorageService.downloadObject(file);
-
-    res.status(response.status);
-    response.headers.forEach((value, key) => res.setHeader(key, value));
-
-    if (response.body) {
-      const nodeStream = Readable.fromWeb(response.body as ReadableStream<Uint8Array>);
-      nodeStream.pipe(res);
-    } else {
-      res.end();
-    }
+    const objectPath = `/objects/uploads/${req.file.filename}`;
+    res.json({ objectPath });
   } catch (error) {
-    req.log.error({ err: error }, "Error serving public object");
-    res.status(500).json({ error: "Failed to serve public object" });
+    req.log.error({ err: error }, "Error uploading file");
+    res.status(500).json({ error: "Failed to upload file" });
   }
 });
 
-/**
- * GET /storage/objects/*
- *
- * Serve object entities from PRIVATE_OBJECT_DIR.
- * These are served from a separate path from /public-objects and can optionally
- * be protected with authentication or ACL checks based on the use case.
- */
 router.get("/storage/objects/*path", async (req: Request, res: Response) => {
   try {
     const raw = req.params.path;
     const wildcardPath = Array.isArray(raw) ? raw.join("/") : raw;
     const objectPath = `/objects/${wildcardPath}`;
-    const objectFile = await objectStorageService.getObjectEntityFile(objectPath);
+    const { stream, size, contentType } = await storageService.getFileStream(objectPath);
 
-    // --- Protected route example (uncomment when using replit-auth) ---
-    // if (!req.isAuthenticated()) {
-    //   res.status(401).json({ error: "Unauthorized" });
-    //   return;
-    // }
-    // const canAccess = await objectStorageService.canAccessObjectEntity({
-    //   userId: req.user.id,
-    //   objectFile,
-    //   requestedPermission: ObjectPermission.READ,
-    // });
-    // if (!canAccess) {
-    //   res.status(403).json({ error: "Forbidden" });
-    //   return;
-    // }
+    const range = req.headers.range;
+    if (range) {
+      const parts = range.replace(/bytes=/, "").split("-");
+      const start = parseInt(parts[0], 10);
+      const end = parts[1] ? parseInt(parts[1], 10) : size - 1;
+      const chunkSize = end - start + 1;
 
-    const response = await objectStorageService.downloadObject(objectFile);
+      stream.destroy();
+      const rangeStream = createReadStream(storageService.getAbsolutePath(objectPath), { start, end });
 
-    res.status(response.status);
-    response.headers.forEach((value, key) => res.setHeader(key, value));
-
-    if (response.body) {
-      const nodeStream = Readable.fromWeb(response.body as ReadableStream<Uint8Array>);
-      nodeStream.pipe(res);
-    } else {
-      res.end();
+      res.writeHead(206, {
+        "Content-Range": `bytes ${start}-${end}/${size}`,
+        "Accept-Ranges": "bytes",
+        "Content-Length": chunkSize,
+        "Content-Type": contentType,
+      });
+      rangeStream.pipe(res);
+      return;
     }
+
+    res.setHeader("Content-Type", contentType);
+    res.setHeader("Content-Length", size);
+    res.setHeader("Accept-Ranges", "bytes");
+    stream.pipe(res);
   } catch (error) {
     if (error instanceof ObjectNotFoundError) {
-      req.log.warn({ err: error }, "Object not found");
       res.status(404).json({ error: "Object not found" });
       return;
     }

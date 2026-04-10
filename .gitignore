@@ -44,6 +44,9 @@ Thumbs.db
 .cursor/rules/nx-rules.mdc
 .github/instructions/nx.instructions.md
 
+# Uploaded media files (dev)
+uploads/
+
 # Secrets / env files
 .env
 .env.*

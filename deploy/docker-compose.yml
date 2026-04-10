@@ -35,7 +35,10 @@ services:
       INGEST_HOST: ${INGEST_HOST:-ingest.yourdomain.com}
       SRS_API_URL: ${SRS_API_URL:-http://localhost:1985}
       SRT_INGEST_PORT: ${SRT_INGEST_PORT:-10080}
+      UPLOAD_DIR: /data/uploads
       LOG_LEVEL: ${LOG_LEVEL:-info}
+    volumes:
+      - uploads:/data/uploads
     networks:
       - playout
 
@@ -44,8 +47,6 @@ services:
       context: ..
       dockerfile: deploy/Dockerfile
       target: frontend
-      args:
-        BASE_PATH: /
     restart: unless-stopped
     depends_on:
       - api
@@ -67,11 +68,14 @@ services:
       WORKER_ID: ${WORKER_ID:-worker-1}
       NODE_ENV: production
       LOG_LEVEL: ${LOG_LEVEL:-info}
+    volumes:
+      - uploads:/data/uploads:ro
     networks:
       - playout
 
 volumes:
   pgdata:
+  uploads:
 
 networks:
   playout:

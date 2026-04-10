@@ -28,8 +28,7 @@ WORKDIR /app/artifacts/api-server
 RUN node build.mjs
 
 FROM source AS build-frontend
-ARG BASE_PATH=/
-ENV BASE_PATH=${BASE_PATH}
+ENV BASE_PATH=/
 ENV PORT=5173
 ENV NODE_ENV=production
 WORKDIR /app/artifacts/social-playout
@@ -42,6 +41,7 @@ RUN npx tsc
 # --- API Server runtime ---
 FROM node:20-slim AS api
 RUN corepack enable && corepack prepare pnpm@9 --activate
+RUN mkdir -p /data/uploads
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=source /app/lib/ ./lib/
@@ -52,6 +52,7 @@ COPY --from=source /app/tsconfig.base.json ./
 COPY --from=source /app/artifacts/api-server/package.json ./artifacts/api-server/
 COPY --from=build-api /app/artifacts/api-server/dist ./artifacts/api-server/dist
 ENV NODE_ENV=production
+ENV UPLOAD_DIR=/data/uploads
 EXPOSE 8080
 CMD ["node", "--enable-source-maps", "artifacts/api-server/dist/index.mjs"]
 

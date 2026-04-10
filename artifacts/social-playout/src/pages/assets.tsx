@@ -120,22 +120,15 @@ export default function AssetsPage() {
     setUploadFileName(file.name);
 
     try {
-      const urlRes = await apiFetch<{ uploadURL: string; objectPath: string }>(
-        "/storage/uploads/request-url",
-        {
-          method: "POST",
-          body: JSON.stringify({
-            name: file.name,
-            size: file.size,
-            contentType: file.type,
-          }),
-        }
-      );
+      const formData = new FormData();
+      formData.append("file", file);
 
-      await new Promise<void>((resolve, reject) => {
+      const uploadRes = await new Promise<{ objectPath: string }>((resolve, reject) => {
         const xhr = new XMLHttpRequest();
-        xhr.open("PUT", urlRes.uploadURL, true);
-        xhr.setRequestHeader("Content-Type", file.type);
+        xhr.open("POST", `${apiBase()}/storage/upload`, true);
+
+        const token = localStorage.getItem("auth_token");
+        if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
 
         xhr.upload.addEventListener("progress", (e) => {
           if (e.lengthComputable) {
@@ -145,17 +138,17 @@ export default function AssetsPage() {
 
         xhr.addEventListener("load", () => {
           if (xhr.status >= 200 && xhr.status < 300) {
-            resolve();
+            resolve(JSON.parse(xhr.responseText));
           } else {
             reject(new Error(`Upload failed: ${xhr.status}`));
           }
         });
 
         xhr.addEventListener("error", () => reject(new Error("Upload failed")));
-        xhr.send(file);
+        xhr.send(formData);
       });
 
-      const servingUrl = `${apiBase()}/storage${urlRes.objectPath}`;
+      const servingUrl = `${apiBase()}/storage${uploadRes.objectPath}`;
       const mediaType = detectMediaType(file.type);
       const nameWithoutExt = file.name.replace(/\.[^/.]+$/, "");
 
