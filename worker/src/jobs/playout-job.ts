@@ -353,17 +353,28 @@ export class PlayoutJobRunner {
       await mkdir(path.dirname(playlistPath), { recursive: true });
       await writeFile(playlistPath, content, "utf-8");
 
-      return [
+      const hasHttpUrls = files.some((f) => f.startsWith("http://") || f.startsWith("https://"));
+
+      const args = [
         "ffmpeg",
         "-hide_banner",
         "-loglevel", "info",
         "-stats",
         "-re",
+      ];
+
+      if (hasHttpUrls) {
+        args.push("-protocol_whitelist", "file,http,https,tcp,tls,crypto");
+      }
+
+      args.push(
         "-f", "concat",
         "-safe", "0",
         "-stream_loop", "-1",
         "-i", playlistPath,
-      ];
+      );
+
+      return args;
     }
 
     if (this.job.sourceMode === "fallback" && this.job.sourceRef) {
@@ -392,10 +403,13 @@ export class PlayoutJobRunner {
       await mkdir(path.dirname(playlistPath), { recursive: true });
       await writeFile(playlistPath, content, "utf-8");
 
+      const hasHttpUrls = files.some((f) => f.startsWith("http://") || f.startsWith("https://"));
+
       return buildPlaylistCommand({
         playlistFile: playlistPath,
         destinations,
         loop: true,
+        protocolWhitelist: hasHttpUrls,
       });
     }
 

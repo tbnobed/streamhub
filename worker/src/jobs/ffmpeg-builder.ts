@@ -90,20 +90,27 @@ export function buildFileLoopCommand(opts: FilePlayoutOptions): string[] {
  *   ffmpeg -re -f concat -safe 0 -stream_loop -1 -i /tmp/playlist.txt \
  *     -c:v copy -c:a copy -f flv rtmp://...
  */
-export function buildPlaylistCommand(opts: PlaylistPlayoutOptions): string[] {
+export function buildPlaylistCommand(opts: PlaylistPlayoutOptions & { protocolWhitelist?: boolean }): string[] {
   const loop = opts.loop !== false;
   const cmd = [
     "ffmpeg",
     "-hide_banner",
     "-loglevel", "warning",
     "-re",
+  ];
+
+  if (opts.protocolWhitelist) {
+    cmd.push("-protocol_whitelist", "file,http,https,tcp,tls,crypto");
+  }
+
+  cmd.push(
     "-f", "concat",
     "-safe", "0",
     ...(loop ? ["-stream_loop", "-1"] : []),
     "-i", opts.playlistFile,
     "-c:v", "copy",
     "-c:a", "copy",
-  ];
+  );
 
   cmd.push(...buildOutputArgs(opts.destinations));
 

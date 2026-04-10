@@ -234,9 +234,16 @@ router.post("/channels/:id/start", async (req, res): Promise<void> => {
       .where(eq(playlistItemsTable.playlistId, channel.activePlaylistId))
       .orderBy(asc(playlistItemsTable.position));
 
+    const apiPort = process.env.PORT || "8080";
     const filePaths = playlistItems
       .map((item) => item.assetFilePath)
-      .filter((fp): fp is string => !!fp);
+      .filter((fp): fp is string => !!fp)
+      .map((fp) => {
+        if (fp.startsWith("/api/")) {
+          return `http://localhost:${apiPort}${fp}`;
+        }
+        return fp;
+      });
 
     if (filePaths.length === 0) {
       res.status(400).json({ error: "Playlist has no assets with valid file paths. Add media files to the playlist first." });
