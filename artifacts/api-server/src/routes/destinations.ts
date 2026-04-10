@@ -32,13 +32,16 @@ router.post("/destinations", async (req, res): Promise<void> => {
     return;
   }
 
+  const values = {
+    ...parsed.data,
+    isActive: true,
+    status: "idle",
+    streamKey: parsed.data.streamKey || "",
+  };
+
   const [dest] = await db
     .insert(destinationsTable)
-    .values({
-      ...parsed.data,
-      isActive: true,
-      status: "idle",
-    })
+    .values(values)
     .returning();
 
   res.status(201).json(dest);

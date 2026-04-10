@@ -9,7 +9,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Share2, Plus, Trash2, Youtube, Facebook, Twitch, MonitorPlay, Pencil } from "lucide-react";
+import { Share2, Plus, Trash2, Youtube, Facebook, Twitch, MonitorPlay, Pencil, Cable } from "lucide-react";
 import { useState } from "react";
 import { apiBase } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
@@ -47,14 +47,18 @@ const PLATFORM_ICONS: Record<string, React.ComponentType<{ className?: string }>
   youtube: Youtube,
   facebook: Facebook,
   twitch: Twitch,
+  srt: Cable,
 };
 
-const PLATFORM_RTMP_URLS: Record<string, string> = {
+const PLATFORM_STREAM_URLS: Record<string, string> = {
   youtube: "rtmp://a.rtmp.youtube.com/live2",
   facebook: "rtmps://live-api-s.facebook.com:443/rtmp",
   twitch: "rtmp://live.twitch.tv/live",
+  srt: "srt://",
   custom: "",
 };
+
+const SRT_PLATFORMS = new Set(["srt"]);
 
 function PlatformIcon({ platform }: { platform: string }) {
   const Icon = PLATFORM_ICONS[platform] ?? MonitorPlay;
@@ -113,11 +117,11 @@ export default function DestinationsPage() {
   });
 
   const handlePlatformChange = (platform: string) => {
-    setForm({ ...form, platform, streamUrl: PLATFORM_RTMP_URLS[platform] ?? "" });
+    setForm({ ...form, platform, streamUrl: PLATFORM_STREAM_URLS[platform] ?? "", streamKey: SRT_PLATFORMS.has(platform) ? "" : form.streamKey });
   };
 
   const handleEditPlatformChange = (platform: string) => {
-    setEditForm({ ...editForm, platform, streamUrl: PLATFORM_RTMP_URLS[platform] ?? "" });
+    setEditForm({ ...editForm, platform, streamUrl: PLATFORM_STREAM_URLS[platform] ?? "" });
   };
 
   const openEdit = (dest: Destination) => {
@@ -221,22 +225,32 @@ export default function DestinationsPage() {
                   <SelectItem value="youtube">YouTube Live</SelectItem>
                   <SelectItem value="facebook">Facebook Live</SelectItem>
                   <SelectItem value="twitch">Twitch</SelectItem>
+                  <SelectItem value="srt">SRT</SelectItem>
                   <SelectItem value="custom">Custom RTMP</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>RTMP URL</Label>
-              <Input value={form.streamUrl} onChange={(e) => setForm({ ...form, streamUrl: e.target.value })} placeholder="rtmp://a.rtmp.youtube.com/live2" />
+              <Label>{SRT_PLATFORMS.has(form.platform) ? "SRT URL" : "RTMP URL"}</Label>
+              <Input
+                value={form.streamUrl}
+                onChange={(e) => setForm({ ...form, streamUrl: e.target.value })}
+                placeholder={SRT_PLATFORMS.has(form.platform) ? "srt://hostname:port?mode=caller" : "rtmp://a.rtmp.youtube.com/live2"}
+              />
+              {SRT_PLATFORMS.has(form.platform) && (
+                <p className="text-xs text-muted-foreground">Full SRT URL including parameters (e.g. srt://host:9000?mode=caller&latency=200000)</p>
+              )}
             </div>
-            <div className="space-y-2">
-              <Label>Stream Key</Label>
-              <Input type="password" value={form.streamKey} onChange={(e) => setForm({ ...form, streamKey: e.target.value })} placeholder="xxxx-xxxx-xxxx-xxxx" />
-            </div>
+            {!SRT_PLATFORMS.has(form.platform) && (
+              <div className="space-y-2">
+                <Label>Stream Key</Label>
+                <Input type="password" value={form.streamKey} onChange={(e) => setForm({ ...form, streamKey: e.target.value })} placeholder="xxxx-xxxx-xxxx-xxxx" />
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
-            <Button disabled={!form.name || !form.streamUrl || createMutation.isPending} onClick={() => createMutation.mutate(form)}>
+            <Button disabled={!form.name || !form.streamUrl || (!SRT_PLATFORMS.has(form.platform) && !form.streamKey) || createMutation.isPending} onClick={() => createMutation.mutate(form)}>
               {createMutation.isPending ? "Adding…" : "Add Destination"}
             </Button>
           </DialogFooter>
@@ -259,24 +273,34 @@ export default function DestinationsPage() {
                   <SelectItem value="youtube">YouTube Live</SelectItem>
                   <SelectItem value="facebook">Facebook Live</SelectItem>
                   <SelectItem value="twitch">Twitch</SelectItem>
+                  <SelectItem value="srt">SRT</SelectItem>
                   <SelectItem value="custom">Custom RTMP</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>RTMP URL</Label>
-              <Input value={editForm.streamUrl} onChange={(e) => setEditForm({ ...editForm, streamUrl: e.target.value })} />
-            </div>
-            <div className="space-y-2">
-              <Label>Stream Key</Label>
+              <Label>{SRT_PLATFORMS.has(editForm.platform) ? "SRT URL" : "RTMP URL"}</Label>
               <Input
-                type="password"
-                value={editForm.streamKey}
-                onChange={(e) => setEditForm({ ...editForm, streamKey: e.target.value })}
-                placeholder="Leave blank to keep current key"
+                value={editForm.streamUrl}
+                onChange={(e) => setEditForm({ ...editForm, streamUrl: e.target.value })}
+                placeholder={SRT_PLATFORMS.has(editForm.platform) ? "srt://hostname:port?mode=caller" : "rtmp://..."}
               />
-              <p className="text-xs text-muted-foreground">Only fill this in if you want to change the key</p>
+              {SRT_PLATFORMS.has(editForm.platform) && (
+                <p className="text-xs text-muted-foreground">Full SRT URL including parameters (e.g. srt://host:9000?mode=caller&latency=200000)</p>
+              )}
             </div>
+            {!SRT_PLATFORMS.has(editForm.platform) && (
+              <div className="space-y-2">
+                <Label>Stream Key</Label>
+                <Input
+                  type="password"
+                  value={editForm.streamKey}
+                  onChange={(e) => setEditForm({ ...editForm, streamKey: e.target.value })}
+                  placeholder="Leave blank to keep current key"
+                />
+                <p className="text-xs text-muted-foreground">Only fill this in if you want to change the key</p>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => { setEditOpen(false); setEditingDest(null); }}>Cancel</Button>

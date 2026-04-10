@@ -82,13 +82,16 @@ export class PlayoutJobRunner {
   ): Promise<void> {
     if (this.stopped) return;
 
-    const rtmpUrl = `${dest.streamUrl}/${dest.streamKey}`.replace(/\/+$/, "");
+    const isSrt = dest.platform === "srt";
+    const outputUrl = isSrt
+      ? dest.streamUrl
+      : `${dest.streamUrl}/${dest.streamKey}`.replace(/\/+$/, "");
     const args = [
       ...inputArgs,
       "-c:v", "copy",
       "-c:a", "copy",
-      "-f", "flv",
-      rtmpUrl,
+      "-f", isSrt ? "mpegts" : "flv",
+      outputUrl,
     ];
 
     logger.info({ jobId: this.job.id, destId, destName, cmd: args.join(" ") }, "Launching FFmpeg for destination");
@@ -434,8 +437,12 @@ export class PlayoutJobRunner {
         "-c:a", "copy",
       ];
       for (const dest of destinations) {
-        const rtmpUrl = `${dest.streamUrl}/${dest.streamKey}`.replace(/\/+$/, "");
-        args.push("-f", "flv", rtmpUrl);
+        if (dest.platform === "srt") {
+          args.push("-f", "mpegts", dest.streamUrl);
+        } else {
+          const rtmpUrl = `${dest.streamUrl}/${dest.streamKey}`.replace(/\/+$/, "");
+          args.push("-f", "flv", rtmpUrl);
+        }
       }
       return args;
     }

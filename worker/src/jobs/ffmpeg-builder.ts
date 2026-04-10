@@ -42,6 +42,17 @@ export interface FallbackSlateOptions {
 
 function buildOutputArgs(destinations: DestinationConfig[]): string[] {
   return destinations.flatMap((dest) => {
+    if (dest.platform === "srt") {
+      const srtUrl = dest.streamUrl.includes("?")
+        ? dest.streamUrl
+        : `${dest.streamUrl}`;
+      return [
+        "-c:v", "copy",
+        "-c:a", "copy",
+        "-f", "mpegts",
+        srtUrl,
+      ];
+    }
     const rtmpUrl = `${dest.streamUrl}/${dest.streamKey}`.replace(/\/+$/, "");
     return [
       "-c:v", "copy",
