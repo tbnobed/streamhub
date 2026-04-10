@@ -77,10 +77,6 @@ export default function LoginPage() {
           </CardContent>
         </Card>
 
-        <p className="text-center text-xs text-muted-foreground">
-          Default: <code className="bg-muted px-1 rounded">admin</code> /&nbsp;
-          <code className="bg-muted px-1 rounded">admin123</code>
-        </p>
       </div>
     </div>
   );
