@@ -2,7 +2,7 @@ import type { Request, Response, NextFunction } from "express";
 import { db } from "@workspace/db";
 import { usersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
-import { sessions } from "../routes/auth";
+import { resolveToken } from "../routes/auth";
 
 declare global {
   namespace Express {
@@ -24,7 +24,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
   }
 
   const token = auth.slice(7);
-  const userId = sessions.get(token);
+  const userId = await resolveToken(token);
   if (!userId) {
     res.status(401).json({ error: "Not authenticated" });
     return;

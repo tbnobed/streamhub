@@ -7,3 +7,4 @@ export * from "./destinations";
 export * from "./youtube";
 export * from "./workers";
 export * from "./logs";
+export * from "./sessions";

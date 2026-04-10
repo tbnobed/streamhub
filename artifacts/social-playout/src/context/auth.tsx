@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from "react";
 import { saveToken, clearToken, getToken } from "@/lib/api";
 import { apiBase } from "@/lib/api";
 
@@ -27,16 +27,50 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(getToken());
   const [isLoading, setIsLoading] = useState(true);
 
+  const logout = useCallback(() => {
+    clearToken();
+    setToken(null);
+    setUser(null);
+    localStorage.removeItem("auth_user");
+  }, []);
+
   useEffect(() => {
+    if (!token) {
+      setIsLoading(false);
+      return;
+    }
+
     const storedUser = localStorage.getItem("auth_user");
-    if (storedUser && token) {
+    if (storedUser) {
       try {
         setUser(JSON.parse(storedUser));
       } catch {
         /* ignore */
       }
     }
-    setIsLoading(false);
+
+    fetch(`${apiBase()}/auth/me`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => {
+        if (!res.ok) {
+          logout();
+          return null;
+        }
+        return res.json();
+      })
+      .then((data) => {
+        if (data) {
+          setUser(data);
+          localStorage.setItem("auth_user", JSON.stringify(data));
+        }
+      })
+      .catch(() => {
+        logout();
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
   }, []);
 
   const login = async (username: string, password: string) => {
@@ -69,18 +103,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
       body: JSON.stringify({ timezone }),
     });
+    if (res.status === 401) {
+      logout();
+      return;
+    }
     if (res.ok) {
       const updated = await res.json();
       setUser(updated);
       localStorage.setItem("auth_user", JSON.stringify(updated));
     }
-  };
-
-  const logout = () => {
-    clearToken();
-    setToken(null);
-    setUser(null);
-    localStorage.removeItem("auth_user");
   };
 
   return (
