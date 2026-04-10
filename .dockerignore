@@ -5,7 +5,12 @@
 .git
 .local
 attached_assets
-artifacts/mockup-sandbox
+artifacts/mockup-sandbox/src
+artifacts/mockup-sandbox/public
+artifacts/mockup-sandbox/index.html
+artifacts/mockup-sandbox/vite.config.ts
+artifacts/mockup-sandbox/tsconfig*.json
+artifacts/mockup-sandbox/components.json
 *.md
 .env*
 .replit
