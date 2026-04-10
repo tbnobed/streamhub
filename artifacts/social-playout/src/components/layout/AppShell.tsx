@@ -19,15 +19,15 @@ import { useState } from "react";
 import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/channels", label: "Channels", icon: Tv2 },
-  { href: "/assets", label: "Assets", icon: Film },
-  { href: "/playlists", label: "Playlists", icon: ListVideo },
-  { href: "/live-inputs", label: "Live Inputs", icon: Radio },
-  { href: "/destinations", label: "Destinations", icon: Share2 },
-  { href: "/workers", label: "Workers", icon: ServerCog },
-  { href: "/users", label: "Users", icon: Users },
-  { href: "/logs", label: "Audit Logs", icon: ScrollText },
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, adminOnly: false },
+  { href: "/channels", label: "Channels", icon: Tv2, adminOnly: false },
+  { href: "/assets", label: "Assets", icon: Film, adminOnly: false },
+  { href: "/playlists", label: "Playlists", icon: ListVideo, adminOnly: false },
+  { href: "/live-inputs", label: "Live Inputs", icon: Radio, adminOnly: false },
+  { href: "/destinations", label: "Destinations", icon: Share2, adminOnly: false },
+  { href: "/workers", label: "Workers", icon: ServerCog, adminOnly: true },
+  { href: "/users", label: "Users", icon: Users, adminOnly: true },
+  { href: "/logs", label: "Audit Logs", icon: ScrollText, adminOnly: true },
 ];
 
 interface AppShellProps {
@@ -74,7 +74,7 @@ export function AppShell({ children }: AppShellProps) {
 
         {/* Nav */}
         <nav className="flex-1 overflow-y-auto py-4 px-3">
-          {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
+          {NAV_ITEMS.filter(item => !item.adminOnly || user?.role === "admin").map(({ href, label, icon: Icon }) => {
             const active = location === href || (href !== "/dashboard" && location.startsWith(href));
             return (
               <Link key={href} href={href}>

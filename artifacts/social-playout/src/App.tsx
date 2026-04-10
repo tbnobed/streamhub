@@ -29,6 +29,14 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function AdminRoute({ children }: { children: React.ReactNode }) {
+  const { user, isLoading } = useAuth();
+  if (isLoading) return null;
+  if (!user) return <Redirect to="/login" />;
+  if (user.role !== "admin") return <Redirect to="/dashboard" />;
+  return <>{children}</>;
+}
+
 function Router() {
   return (
     <Switch>
@@ -64,13 +72,13 @@ function Router() {
         {() => <ProtectedRoute><YouTubePage /></ProtectedRoute>}
       </Route>
       <Route path="/workers">
-        {() => <ProtectedRoute><WorkersPage /></ProtectedRoute>}
+        {() => <AdminRoute><WorkersPage /></AdminRoute>}
       </Route>
       <Route path="/logs">
-        {() => <ProtectedRoute><LogsPage /></ProtectedRoute>}
+        {() => <AdminRoute><LogsPage /></AdminRoute>}
       </Route>
       <Route path="/users">
-        {() => <ProtectedRoute><UsersPage /></ProtectedRoute>}
+        {() => <AdminRoute><UsersPage /></AdminRoute>}
       </Route>
       <Route component={NotFound} />
     </Switch>

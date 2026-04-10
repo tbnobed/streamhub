@@ -9,10 +9,11 @@ import {
   UpdateJobStatusBody,
   SubmitWorkerEventBody,
 } from "@workspace/api-zod";
+import { requireAuth, requireAdmin } from "../lib/authMiddleware";
 
 const router: IRouter = Router();
 
-router.get("/workers", async (_req, res): Promise<void> => {
+router.get("/workers", requireAuth, requireAdmin, async (_req, res): Promise<void> => {
   const workers = await db.select().from(workerNodesTable).orderBy(workerNodesTable.createdAt);
   res.json(workers);
 });

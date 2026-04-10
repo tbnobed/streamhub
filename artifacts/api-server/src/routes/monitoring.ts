@@ -10,10 +10,11 @@ import {
 } from "@workspace/db";
 import { eq, desc } from "drizzle-orm";
 import { ListStreamSessionsQueryParams } from "@workspace/api-zod";
+import { requireAuth, requireAdmin } from "../lib/authMiddleware";
 
 const router: IRouter = Router();
 
-router.get("/monitoring/stream-health", async (_req, res): Promise<void> => {
+router.get("/monitoring/stream-health", requireAuth, requireAdmin, async (_req, res): Promise<void> => {
   const channels = await db.select().from(channelsTable);
   const destinations = await db.select().from(destinationsTable);
   const jobs = await db.select().from(playoutJobsTable);
@@ -53,7 +54,7 @@ router.get("/monitoring/stream-health", async (_req, res): Promise<void> => {
   res.json(health);
 });
 
-router.get("/monitoring/sessions", async (req, res): Promise<void> => {
+router.get("/monitoring/sessions", requireAuth, requireAdmin, async (req, res): Promise<void> => {
   const params = ListStreamSessionsQueryParams.safeParse(req.query);
 
   let sessions = await db

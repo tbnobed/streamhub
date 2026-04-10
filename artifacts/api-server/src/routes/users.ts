@@ -10,10 +10,11 @@ import {
   DeleteUserParams,
 } from "@workspace/api-zod";
 import { hashPassword } from "./auth";
+import { requireAuth, requireAdmin } from "../lib/authMiddleware";
 
 const router: IRouter = Router();
 
-router.get("/users", async (_req, res): Promise<void> => {
+router.get("/users", requireAuth, requireAdmin, async (_req, res): Promise<void> => {
   const users = await db
     .select({
       id: usersTable.id,
@@ -28,7 +29,7 @@ router.get("/users", async (_req, res): Promise<void> => {
   res.json(users);
 });
 
-router.post("/users", async (req, res): Promise<void> => {
+router.post("/users", requireAuth, requireAdmin, async (req, res): Promise<void> => {
   const parsed = CreateUserBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -53,7 +54,7 @@ router.post("/users", async (req, res): Promise<void> => {
   res.status(201).json(user);
 });
 
-router.get("/users/:id", async (req, res): Promise<void> => {
+router.get("/users/:id", requireAuth, requireAdmin, async (req, res): Promise<void> => {
   const params = GetUserParams.safeParse({ id: Number(req.params.id) });
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -80,7 +81,7 @@ router.get("/users/:id", async (req, res): Promise<void> => {
   res.json(user);
 });
 
-router.patch("/users/:id", async (req, res): Promise<void> => {
+router.patch("/users/:id", requireAuth, requireAdmin, async (req, res): Promise<void> => {
   const params = UpdateUserParams.safeParse({ id: Number(req.params.id) });
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -125,7 +126,7 @@ router.patch("/users/:id", async (req, res): Promise<void> => {
   res.json(user);
 });
 
-router.delete("/users/:id", async (req, res): Promise<void> => {
+router.delete("/users/:id", requireAuth, requireAdmin, async (req, res): Promise<void> => {
   const params = DeleteUserParams.safeParse({ id: Number(req.params.id) });
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
