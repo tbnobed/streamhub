@@ -49,14 +49,40 @@ export class PlayoutJobRunner {
       message: `FFmpeg process started (pid=${pid})`,
     });
 
+    let lastBitrate = 0;
+    let lastFps = 0;
+    let lastStatsSentAt = 0;
+
     this.process.stderr?.on("data", (data: Buffer) => {
-      const line = data.toString().trim();
-      if (line.includes("bitrate=")) {
-        const bitrateMatch = line.match(/bitrate=\s*([\d.]+)\s*kbits/);
+      const text = data.toString();
+      for (const segment of text.split(/[\r\n]+/)) {
+        const trimmed = segment.trim();
+        if (!trimmed) continue;
+
+        const bitrateMatch = trimmed.match(/bitrate=\s*([\d.]+)\s*kbits/);
         if (bitrateMatch) {
-          const bitrate = Math.round(parseFloat(bitrateMatch[1]!) * 1000);
-          this.api.updateJobStatus(this.job.id, "running", { bitrate, pid }).catch(() => {});
+          lastBitrate = Math.round(parseFloat(bitrateMatch[1]!) * 1000);
         }
+
+        const streamFpsMatch = trimmed.match(/,\s*([\d.]+)\s+fps/);
+        if (streamFpsMatch) {
+          lastFps = Math.round(parseFloat(streamFpsMatch[1]!));
+        }
+
+        const fpsMatch = trimmed.match(/fps=\s*([\d.]+)/);
+        if (fpsMatch) {
+          lastFps = Math.round(parseFloat(fpsMatch[1]!));
+        }
+      }
+
+      const now = Date.now();
+      if (lastBitrate > 0 && now - lastStatsSentAt >= 5000) {
+        lastStatsSentAt = now;
+        this.api.updateJobStatus(this.job.id, "running", {
+          bitrate: lastBitrate,
+          fps: lastFps || undefined,
+          pid,
+        }).catch(() => {});
       }
     });
 
@@ -123,7 +149,8 @@ export class PlayoutJobRunner {
       const args = [
         "ffmpeg",
         "-hide_banner",
-        "-loglevel", "warning",
+        "-loglevel", "info",
+        "-stats",
         "-re",
         "-i", this.job.sourceRef,
         "-c:v", "copy",

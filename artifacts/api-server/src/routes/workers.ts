@@ -105,6 +105,18 @@ router.post("/workers/jobs/:id/status", async (req, res): Promise<void> => {
     return;
   }
 
+  const [existingJob] = await db.select().from(playoutJobsTable).where(eq(playoutJobsTable.id, params.data.id));
+  if (!existingJob) {
+    res.status(404).json({ error: "Job not found" });
+    return;
+  }
+
+  const terminalStates = ["stopped", "failed", "completed"];
+  if (terminalStates.includes(existingJob.status) && parsed.data.status === "running") {
+    res.json({ ok: true, ignored: true, reason: "job_already_terminal" });
+    return;
+  }
+
   const updates: Record<string, unknown> = {
     status: parsed.data.status,
   };
@@ -113,7 +125,7 @@ router.post("/workers/jobs/:id/status", async (req, res): Promise<void> => {
   if (parsed.data.pid != null) updates.pid = parsed.data.pid;
   if (parsed.data.errorMessage != null) updates.errorMessage = parsed.data.errorMessage;
 
-  if (parsed.data.status === "running") updates.startedAt = new Date();
+  if (parsed.data.status === "running" && !existingJob.startedAt) updates.startedAt = new Date();
   if (["stopped", "failed", "completed"].includes(parsed.data.status)) updates.stoppedAt = new Date();
 
   await db

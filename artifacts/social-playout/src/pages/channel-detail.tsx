@@ -42,6 +42,8 @@ interface ActiveJob {
   ffmpegCommand: string;
   destinations: Array<{ id: number; name: string; platform: string }>;
   startedAt: string;
+  bitrate: number | null;
+  fps: number | null;
 }
 
 interface Channel {
@@ -421,27 +423,33 @@ export default function ChannelDetailPage() {
               <RefreshCw className="w-4 h-4 text-muted-foreground animate-spin" style={{ animationDuration: "5s" }} />
             </CardHeader>
             <CardContent>
-              {isLive ? (
-                <div className="grid grid-cols-3 gap-6">
-                  <div>
-                    <p className="text-xs text-muted-foreground">Bitrate</p>
-                    <p className="text-2xl font-mono font-bold">
-                      {channel.bitrate ? `${Math.round(channel.bitrate / 1000)}k` : "—"}
-                    </p>
-                    <p className="text-xs text-muted-foreground">kbps</p>
+              {isLive ? (() => {
+                const jobBitrate = channel.activeJob?.bitrate;
+                const jobFps = channel.activeJob?.fps;
+                const jobStarted = channel.activeJob?.startedAt;
+                const uptimeSec = jobStarted ? Math.floor((Date.now() - new Date(jobStarted).getTime()) / 1000) : null;
+                return (
+                  <div className="grid grid-cols-3 gap-6">
+                    <div>
+                      <p className="text-xs text-muted-foreground">Bitrate</p>
+                      <p className="text-2xl font-mono font-bold">
+                        {jobBitrate ? `${Math.round(jobBitrate / 1000)}k` : "—"}
+                      </p>
+                      <p className="text-xs text-muted-foreground">kbps</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">FPS</p>
+                      <p className="text-2xl font-mono font-bold">{jobFps ?? "—"}</p>
+                      <p className="text-xs text-muted-foreground">frames/sec</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Uptime</p>
+                      <p className="text-2xl font-mono font-bold">{uptimeSec != null ? formatUptime(uptimeSec) : "—"}</p>
+                      <p className="text-xs text-muted-foreground">duration</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">FPS</p>
-                    <p className="text-2xl font-mono font-bold">{channel.fps ?? "—"}</p>
-                    <p className="text-xs text-muted-foreground">frames/sec</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">Uptime</p>
-                    <p className="text-2xl font-mono font-bold">{channel.uptimeSeconds ? formatUptime(channel.uptimeSeconds) : "—"}</p>
-                    <p className="text-xs text-muted-foreground">duration</p>
-                  </div>
-                </div>
-              ) : (
+                );
+              })() : (
                 <div className="py-6 text-center text-muted-foreground">
                   <Tv2 className="w-8 h-8 mx-auto mb-2 opacity-20" />
                   <p className="text-sm">Channel is {channel.status}. Start the channel to see stream stats.</p>

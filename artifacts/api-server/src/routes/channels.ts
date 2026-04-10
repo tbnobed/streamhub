@@ -115,6 +115,8 @@ router.get("/channels/:id", async (req, res): Promise<void> => {
         ffmpegCommand: job.ffmpegCommand,
         destinations: job.destinations,
         startedAt: job.startedAt,
+        bitrate: job.bitrate,
+        fps: job.fps ? Number(job.fps) : null,
       };
     }
   }
@@ -243,7 +245,7 @@ router.post("/channels/:id/start", async (req, res): Promise<void> => {
   });
 
   const ffmpegCmd = [
-    "ffmpeg", "-hide_banner", "-loglevel", "warning", "-re",
+    "ffmpeg", "-hide_banner", "-loglevel", "warning", "-stats", "-re",
     "-i", sourceRef,
     "-c:v", "copy", "-c:a", "copy",
     ...ffmpegOutputArgs,

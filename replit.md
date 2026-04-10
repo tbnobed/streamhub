@@ -85,6 +85,9 @@ Located in `worker/`. Runs FFmpeg jobs assigned by the API.
 - Sends heartbeat every 15s
 - Auto-restarts failed FFmpeg processes (up to 5 times)
 - Supports: playlist loop, live RTMP/SRT ingest, fallback slate
+- Reports stream health (bitrate/fps) from FFmpeg stderr, throttled to every 5s
+- FFmpeg uses `-loglevel info -stats` for progress output
+- API rejects worker status updates that try to flip terminal jobs (stopped/failed/completed) back to running
 
 ## Deployment (Docker)
 - `docker-compose.yml` — Full stack: postgres, redis, api, web, worker, nginx
