@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
+import { ObjectStorageService } from "../lib/objectStorage";
 import {
   channelsTable,
   playlistsTable,
@@ -234,20 +235,25 @@ router.post("/channels/:id/start", async (req, res): Promise<void> => {
       .where(eq(playlistItemsTable.playlistId, channel.activePlaylistId))
       .orderBy(asc(playlistItemsTable.position));
 
-    const apiPort = process.env.PORT || "8080";
-    const filePaths = playlistItems
+    const rawPaths = playlistItems
       .map((item) => item.assetFilePath)
-      .filter((fp): fp is string => !!fp)
-      .map((fp) => {
-        if (fp.startsWith("/api/")) {
-          return `http://localhost:${apiPort}${fp}`;
-        }
-        return fp;
-      });
+      .filter((fp): fp is string => !!fp);
 
-    if (filePaths.length === 0) {
+    if (rawPaths.length === 0) {
       res.status(400).json({ error: "Playlist has no assets with valid file paths. Add media files to the playlist first." });
       return;
+    }
+
+    const storageService = new ObjectStorageService();
+    const filePaths: string[] = [];
+    for (const fp of rawPaths) {
+      if (fp.startsWith("/api/storage/objects/")) {
+        const objectPath = fp.replace("/api/storage", "");
+        const signedUrl = await storageService.getSignedDownloadURL(objectPath, 7200);
+        filePaths.push(signedUrl);
+      } else {
+        filePaths.push(fp);
+      }
     }
 
     sourceRef = filePaths.join(",");
