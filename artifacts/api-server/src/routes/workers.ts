@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { workerNodesTable, playoutJobsTable, workerEventsTable } from "@workspace/db";
-import { eq, and } from "drizzle-orm";
+import { eq, and, isNull } from "drizzle-orm";
 import {
   WorkerHeartbeatBody,
   FetchWorkerJobsQueryParams,
@@ -61,6 +61,22 @@ router.get("/workers/jobs", async (req, res): Promise<void> => {
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
     return;
+  }
+
+  const pendingJobs = await db
+    .select()
+    .from(playoutJobsTable)
+    .where(
+      and(
+        eq(playoutJobsTable.status, "pending"),
+        isNull(playoutJobsTable.workerId)
+      )
+    );
+
+  for (const pj of pendingJobs) {
+    await db.update(playoutJobsTable)
+      .set({ workerId: params.data.workerId, status: "running" })
+      .where(eq(playoutJobsTable.id, pj.id));
   }
 
   const jobs = await db
