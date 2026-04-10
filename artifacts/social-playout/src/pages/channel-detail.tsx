@@ -91,7 +91,7 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     const d = await res.json().catch(() => ({}));
-    throw new Error(d?.message ?? `HTTP ${res.status}`);
+    throw new Error(d?.error ?? d?.message ?? `HTTP ${res.status}`);
   }
   if (res.status === 204) return undefined as T;
   return res.json();

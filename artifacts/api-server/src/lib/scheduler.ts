@@ -10,9 +10,11 @@ import {
   streamSessionsTable,
   auditLogsTable,
 } from "@workspace/db";
-import { eq, and, asc } from "drizzle-orm";
+import { eq, and, asc, desc } from "drizzle-orm";
 import { logger } from "./logger";
 import { LocalStorageService } from "./objectStorage";
+
+const RESTART_COOLDOWN_MS = 5 * 60 * 1000;
 
 function getTimeInTimezone(timezone: string): { hours: number; minutes: number; dayOfWeek: number } {
   try {
@@ -45,6 +47,21 @@ function timeToMinutes(timeStr: string): number {
 async function startChannel(channelId: number): Promise<void> {
   const [channel] = await db.select().from(channelsTable).where(eq(channelsTable.id, channelId));
   if (!channel || channel.status === "on_air") return;
+
+  const [lastFailedJob] = await db.select({ stoppedAt: playoutJobsTable.stoppedAt })
+    .from(playoutJobsTable)
+    .where(and(eq(playoutJobsTable.channelId, channelId), eq(playoutJobsTable.status, "failed")))
+    .orderBy(desc(playoutJobsTable.stoppedAt))
+    .limit(1);
+
+  if (lastFailedJob?.stoppedAt) {
+    const elapsed = Date.now() - new Date(lastFailedJob.stoppedAt).getTime();
+    if (elapsed < RESTART_COOLDOWN_MS) {
+      logger.info({ channelId, cooldownRemaining: Math.round((RESTART_COOLDOWN_MS - elapsed) / 1000) },
+        "Scheduler: skipping start, recent job failure cooldown active");
+      return;
+    }
+  }
 
   const activeDests = await db.select().from(destinationsTable)
     .where(and(eq(destinationsTable.channelId, channel.id), eq(destinationsTable.isActive, true)));
