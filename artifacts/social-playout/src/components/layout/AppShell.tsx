@@ -8,7 +8,6 @@ import {
   ListVideo,
   Radio,
   Share2,
-  Youtube,
   ServerCog,
   ScrollText,
   LogOut,
@@ -26,7 +25,6 @@ const NAV_ITEMS = [
   { href: "/playlists", label: "Playlists", icon: ListVideo },
   { href: "/live-inputs", label: "Live Inputs", icon: Radio },
   { href: "/destinations", label: "Destinations", icon: Share2 },
-  { href: "/youtube", label: "YouTube", icon: Youtube },
   { href: "/workers", label: "Workers", icon: ServerCog },
   { href: "/logs", label: "Audit Logs", icon: ScrollText },
 ];
