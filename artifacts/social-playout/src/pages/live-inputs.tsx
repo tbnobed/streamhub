@@ -395,7 +395,7 @@ export default function LiveInputsPage() {
             return (
               <Card key={input.id}>
                 <CardContent className="p-5">
-                  <div className="grid grid-cols-[1fr_1fr] gap-5 items-stretch">
+                  <div className="grid grid-cols-[3fr_2fr] gap-5 items-stretch">
                     <div className="flex flex-col">
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex items-center gap-3">
