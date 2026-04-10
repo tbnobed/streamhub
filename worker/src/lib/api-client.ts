@@ -55,6 +55,7 @@ export class ApiClient {
     fps?: number;
     pid?: number;
     errorMessage?: string;
+    destinationHealth?: Record<string, { status: string; error?: string }>;
   }): Promise<void> {
     await this.fetch(`/workers/jobs/${jobId}/status`, {
       method: "POST",

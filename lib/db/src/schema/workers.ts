@@ -26,6 +26,7 @@ export const playoutJobsTable = pgTable("playout_jobs", {
   errorMessage: text("error_message"),
   bitrate: integer("bitrate"),
   fps: text("fps"),
+  destinationHealth: jsonb("destination_health"),
   startedAt: timestamp("started_at", { withTimezone: true }),
   stoppedAt: timestamp("stopped_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

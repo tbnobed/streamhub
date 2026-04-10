@@ -83,11 +83,13 @@ All routes under `/api`:
 Located in `worker/`. Runs FFmpeg jobs assigned by the API.
 - Polls API every 5s for jobs
 - Sends heartbeat every 15s
-- Auto-restarts failed FFmpeg processes (up to 5 times)
+- Auto-restarts failed FFmpeg processes (up to 5 times per destination)
 - Supports: playlist loop, live RTMP/SRT ingest, fallback slate
 - Reports stream health (bitrate/fps) from FFmpeg stderr, throttled to every 5s
 - FFmpeg uses `-loglevel info -stats` for progress output
 - API rejects worker status updates that try to flip terminal jobs (stopped/failed/completed) back to running
+- **Multi-destination architecture**: When >1 destination, spawns separate FFmpeg processes per output to isolate RTMP/RTMPS connections (avoids librtmp TLS conflicts). Single destination uses single process for efficiency.
+- **Per-destination health**: Each output reports its own status (connected/connecting/error) via `destinationHealth` JSONB field. Frontend shows per-destination status cards with green/yellow/red indicators.
 
 ## Deployment (Docker)
 - `docker-compose.yml` — Full stack: postgres, redis, api, web, worker, nginx

@@ -117,6 +117,7 @@ router.get("/channels/:id", async (req, res): Promise<void> => {
         startedAt: job.startedAt,
         bitrate: job.bitrate,
         fps: job.fps ? Number(job.fps) : null,
+        destinationHealth: job.destinationHealth,
       };
     }
   }

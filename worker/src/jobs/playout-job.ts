@@ -5,13 +5,28 @@ import { logger } from "../lib/logger.js";
 import { buildFileLoopCommand, buildPlaylistCommand, generateConcatPlaylistContent } from "./ffmpeg-builder.js";
 import type { ApiClient, PlayoutJob } from "../lib/api-client.js";
 
+interface DestProcess {
+  process: ChildProcess;
+  destId: string;
+  destName: string;
+  platform: string;
+  healthy: boolean;
+  error?: string;
+  restartCount: number;
+}
+
 export class PlayoutJobRunner {
   private job: PlayoutJob;
   private api: ApiClient;
-  private process: ChildProcess | null = null;
+  private destProcesses: Map<string, DestProcess> = new Map();
+  private singleProcess: ChildProcess | null = null;
   private restartCount = 0;
   private maxRestarts = 5;
   private stopped = false;
+  private lastBitrate = 0;
+  private lastFps = 0;
+  private lastStatsSentAt = 0;
+  private statsInterval: ReturnType<typeof setInterval> | null = null;
 
   constructor(job: PlayoutJob, api: ApiClient) {
     this.job = job;
@@ -20,10 +35,189 @@ export class PlayoutJobRunner {
 
   async start(): Promise<void> {
     this.stopped = false;
-    await this.launchProcess();
+    const destinations = this.job.destinations ?? [];
+
+    if (destinations.length > 1) {
+      await this.launchMultiDestination();
+    } else {
+      await this.launchSingleProcess();
+    }
   }
 
-  private async launchProcess(): Promise<void> {
+  private async launchMultiDestination(): Promise<void> {
+    if (this.stopped) return;
+
+    const destinations = this.job.destinations ?? [];
+    const inputArgs = await this.buildInputArgs();
+    if (!inputArgs) {
+      logger.error({ jobId: this.job.id }, "Could not build FFmpeg input args");
+      await this.api.updateJobStatus(this.job.id, "failed", { errorMessage: "Could not build FFmpeg command" });
+      return;
+    }
+
+    await this.api.updateJobStatus(this.job.id, "running");
+    await this.api.submitEvent({
+      channelId: this.job.channelId,
+      jobId: this.job.id,
+      eventType: "job_started",
+      message: `Starting ${destinations.length} output processes`,
+    });
+
+    for (const dest of destinations) {
+      const destId = String((dest as Record<string, unknown>).id ?? dest.streamKey);
+      const destName = (dest as Record<string, unknown>).name as string ?? dest.platform;
+      await this.launchDestProcess(destId, destName, dest, inputArgs);
+    }
+
+    this.statsInterval = setInterval(() => {
+      this.reportCombinedStats();
+    }, 5000);
+  }
+
+  private async launchDestProcess(
+    destId: string,
+    destName: string,
+    dest: { streamUrl: string; streamKey: string; platform: string },
+    inputArgs: string[],
+  ): Promise<void> {
+    if (this.stopped) return;
+
+    const rtmpUrl = `${dest.streamUrl}/${dest.streamKey}`.replace(/\/+$/, "");
+    const args = [
+      ...inputArgs,
+      "-c:v", "copy",
+      "-c:a", "copy",
+      "-f", "flv",
+      rtmpUrl,
+    ];
+
+    logger.info({ jobId: this.job.id, destId, destName, cmd: args.join(" ") }, "Launching FFmpeg for destination");
+
+    const proc = spawn(args[0]!, args.slice(1), {
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+
+    const dp: DestProcess = {
+      process: proc,
+      destId,
+      destName,
+      platform: dest.platform,
+      healthy: false,
+      restartCount: 0,
+    };
+    this.destProcesses.set(destId, dp);
+
+    proc.stderr?.on("data", (data: Buffer) => {
+      const text = data.toString();
+      for (const segment of text.split(/[\r\n]+/)) {
+        const trimmed = segment.trim();
+        if (!trimmed) continue;
+
+        const bitrateMatch = trimmed.match(/bitrate=\s*([\d.]+)\s*kbits/);
+        if (bitrateMatch) {
+          this.lastBitrate = Math.round(parseFloat(bitrateMatch[1]!) * 1000);
+          dp.healthy = true;
+        }
+
+        const streamFpsMatch = trimmed.match(/,\s*([\d.]+)\s+fps/);
+        if (streamFpsMatch) {
+          this.lastFps = Math.round(parseFloat(streamFpsMatch[1]!));
+        }
+
+        const fpsMatch = trimmed.match(/fps=\s*([\d.]+)/);
+        if (fpsMatch) {
+          this.lastFps = Math.round(parseFloat(fpsMatch[1]!));
+        }
+
+        if (trimmed.includes("Error") || trimmed.includes("error")) {
+          dp.healthy = false;
+          dp.error = trimmed.slice(0, 200);
+          logger.warn({ jobId: this.job.id, destId, destName, error: dp.error }, "FFmpeg destination error");
+        }
+
+        if (trimmed.includes("Output #0")) {
+          dp.healthy = true;
+          dp.error = undefined;
+        }
+      }
+    });
+
+    proc.on("exit", async (code) => {
+      logger.warn({ jobId: this.job.id, destId, destName, code }, "FFmpeg destination process exited");
+      dp.healthy = false;
+
+      if (this.stopped) return;
+
+      if (dp.restartCount < this.maxRestarts) {
+        dp.restartCount++;
+        dp.error = `Process exited (code ${code}), restarting (${dp.restartCount}/${this.maxRestarts})`;
+
+        await this.api.submitEvent({
+          channelId: this.job.channelId,
+          jobId: this.job.id,
+          eventType: "reconnect",
+          message: `${destName}: restarting (attempt ${dp.restartCount}/${this.maxRestarts})`,
+        });
+
+        await new Promise((r) => setTimeout(r, 3000));
+        if (!this.stopped) {
+          this.destProcesses.delete(destId);
+          const inputArgs = await this.buildInputArgs();
+          if (inputArgs) {
+            await this.launchDestProcess(destId, destName, dest, inputArgs);
+          }
+        }
+      } else {
+        dp.error = `Failed after ${this.maxRestarts} restart attempts`;
+
+        await this.api.submitEvent({
+          channelId: this.job.channelId,
+          jobId: this.job.id,
+          eventType: "destination_failed",
+          message: `${destName}: max restart attempts reached`,
+        });
+
+        const allDead = [...this.destProcesses.values()].every((d) => !d.healthy && d.restartCount >= this.maxRestarts);
+        if (allDead) {
+          logger.error({ jobId: this.job.id }, "All destinations failed");
+          await this.api.updateJobStatus(this.job.id, "failed", {
+            errorMessage: "All destination outputs failed",
+          });
+        }
+      }
+
+      this.reportCombinedStats();
+    });
+
+    setTimeout(() => {
+      if (!dp.healthy && !dp.error) {
+        dp.healthy = true;
+      }
+    }, 3000);
+  }
+
+  private reportCombinedStats(): void {
+    if (this.stopped) return;
+
+    const destHealth: Record<string, { status: string; error?: string }> = {};
+    for (const [id, dp] of this.destProcesses) {
+      if (dp.error) {
+        destHealth[id] = { status: "error", error: dp.error };
+      } else if (dp.healthy) {
+        destHealth[id] = { status: "connected" };
+      } else {
+        destHealth[id] = { status: "connecting" };
+      }
+    }
+
+    this.api.updateJobStatus(this.job.id, "running", {
+      bitrate: this.lastBitrate || undefined,
+      fps: this.lastFps || undefined,
+      destinationHealth: destHealth,
+    }).catch(() => {});
+  }
+
+  private async launchSingleProcess(): Promise<void> {
     if (this.stopped) return;
 
     const args = await this.buildArgs();
@@ -35,11 +229,11 @@ export class PlayoutJobRunner {
 
     logger.info({ jobId: this.job.id, cmd: args.join(" ") }, "Launching FFmpeg");
 
-    this.process = spawn(args[0]!, args.slice(1), {
+    this.singleProcess = spawn(args[0]!, args.slice(1), {
       stdio: ["ignore", "pipe", "pipe"],
     });
 
-    const pid = this.process.pid;
+    const pid = this.singleProcess.pid;
 
     await this.api.updateJobStatus(this.job.id, "running", { pid });
     await this.api.submitEvent({
@@ -52,8 +246,15 @@ export class PlayoutJobRunner {
     let lastBitrate = 0;
     let lastFps = 0;
     let lastStatsSentAt = 0;
+    const destinations = this.job.destinations ?? [];
+    const destHealth: Record<string, { status: string; error?: string }> = {};
+    for (let i = 0; i < destinations.length; i++) {
+      const d = destinations[i]!;
+      const key = String((d as Record<string, unknown>).id ?? i);
+      destHealth[key] = { status: "connected" };
+    }
 
-    this.process.stderr?.on("data", (data: Buffer) => {
+    this.singleProcess.stderr?.on("data", (data: Buffer) => {
       const text = data.toString();
       for (const segment of text.split(/[\r\n]+/)) {
         const trimmed = segment.trim();
@@ -73,6 +274,16 @@ export class PlayoutJobRunner {
         if (fpsMatch) {
           lastFps = Math.round(parseFloat(fpsMatch[1]!));
         }
+
+        const outErrorMatch = trimmed.match(/\[out#(\d+)/);
+        if (outErrorMatch && (trimmed.includes("Error") || trimmed.includes("error"))) {
+          const outIdx = parseInt(outErrorMatch[1]!, 10);
+          if (outIdx < destinations.length) {
+            const d = destinations[outIdx]!;
+            const key = String((d as Record<string, unknown>).id ?? outIdx);
+            destHealth[key] = { status: "error", error: trimmed.slice(0, 200) };
+          }
+        }
       }
 
       const now = Date.now();
@@ -82,11 +293,12 @@ export class PlayoutJobRunner {
           bitrate: lastBitrate,
           fps: lastFps || undefined,
           pid,
+          destinationHealth: destHealth,
         }).catch(() => {});
       }
     });
 
-    this.process.on("exit", async (code) => {
+    this.singleProcess.on("exit", async (code) => {
       logger.warn({ jobId: this.job.id, code }, "FFmpeg process exited");
 
       if (this.stopped) {
@@ -106,7 +318,7 @@ export class PlayoutJobRunner {
         });
 
         await new Promise((r) => setTimeout(r, 3000));
-        await this.launchProcess();
+        await this.launchSingleProcess();
       } else {
         logger.error({ jobId: this.job.id }, "Max restarts reached, job failed");
         await this.api.updateJobStatus(this.job.id, "failed", {
@@ -120,6 +332,53 @@ export class PlayoutJobRunner {
         });
       }
     });
+  }
+
+  private async buildInputArgs(): Promise<string[] | null> {
+    if (this.job.sourceMode === "live_input" && this.job.sourceRef) {
+      return [
+        "ffmpeg",
+        "-hide_banner",
+        "-loglevel", "info",
+        "-stats",
+        "-re",
+        "-i", this.job.sourceRef,
+      ];
+    }
+
+    if (this.job.sourceMode === "playlist" && this.job.sourceRef) {
+      const playlistPath = `/tmp/playlist_${this.job.id}.txt`;
+      const files = this.job.sourceRef.split(",").map((f) => f.trim()).filter(Boolean);
+      const content = generateConcatPlaylistContent(files);
+      await mkdir(path.dirname(playlistPath), { recursive: true });
+      await writeFile(playlistPath, content, "utf-8");
+
+      return [
+        "ffmpeg",
+        "-hide_banner",
+        "-loglevel", "info",
+        "-stats",
+        "-re",
+        "-f", "concat",
+        "-safe", "0",
+        "-stream_loop", "-1",
+        "-i", playlistPath,
+      ];
+    }
+
+    if (this.job.sourceMode === "fallback" && this.job.sourceRef) {
+      return [
+        "ffmpeg",
+        "-hide_banner",
+        "-loglevel", "info",
+        "-stats",
+        "-re",
+        "-stream_loop", "-1",
+        "-i", this.job.sourceRef,
+      ];
+    }
+
+    return null;
   }
 
   private async buildArgs(): Promise<string[] | null> {
@@ -176,12 +435,30 @@ export class PlayoutJobRunner {
 
   stop(): void {
     this.stopped = true;
-    if (this.process && !this.process.killed) {
-      logger.info({ jobId: this.job.id, pid: this.process.pid }, "Stopping FFmpeg");
-      this.process.kill("SIGTERM");
+
+    if (this.statsInterval) {
+      clearInterval(this.statsInterval);
+      this.statsInterval = null;
+    }
+
+    for (const [, dp] of this.destProcesses) {
+      if (dp.process && !dp.process.killed) {
+        logger.info({ jobId: this.job.id, destId: dp.destId, pid: dp.process.pid }, "Stopping FFmpeg destination");
+        dp.process.kill("SIGTERM");
+        setTimeout(() => {
+          if (dp.process && !dp.process.killed) {
+            dp.process.kill("SIGKILL");
+          }
+        }, 5000);
+      }
+    }
+
+    if (this.singleProcess && !this.singleProcess.killed) {
+      logger.info({ jobId: this.job.id, pid: this.singleProcess.pid }, "Stopping FFmpeg");
+      this.singleProcess.kill("SIGTERM");
       setTimeout(() => {
-        if (this.process && !this.process.killed) {
-          this.process.kill("SIGKILL");
+        if (this.singleProcess && !this.singleProcess.killed) {
+          this.singleProcess.kill("SIGKILL");
         }
       }, 5000);
     }

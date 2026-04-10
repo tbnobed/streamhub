@@ -982,6 +982,10 @@ export const UpdateJobStatusBody = zod.object({
   fps: zod.number().nullish(),
   pid: zod.number().nullish(),
   errorMessage: zod.string().nullish(),
+  destinationHealth: zod.record(zod.string(), zod.object({
+    status: zod.string(),
+    error: zod.string().optional(),
+  })).nullish(),
 });
 
 /**

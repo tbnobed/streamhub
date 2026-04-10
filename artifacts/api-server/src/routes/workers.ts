@@ -124,6 +124,7 @@ router.post("/workers/jobs/:id/status", async (req, res): Promise<void> => {
   if (parsed.data.fps != null) updates.fps = String(parsed.data.fps);
   if (parsed.data.pid != null) updates.pid = parsed.data.pid;
   if (parsed.data.errorMessage != null) updates.errorMessage = parsed.data.errorMessage;
+  if (parsed.data.destinationHealth != null) updates.destinationHealth = parsed.data.destinationHealth;
 
   if (parsed.data.status === "running" && !existingJob.startedAt) updates.startedAt = new Date();
   if (["stopped", "failed", "completed"].includes(parsed.data.status)) updates.stoppedAt = new Date();

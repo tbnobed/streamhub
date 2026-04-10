@@ -33,6 +33,11 @@ interface Destination {
   status: string;
 }
 
+interface DestinationHealthEntry {
+  status: string;
+  error?: string;
+}
+
 interface ActiveJob {
   id: number;
   status: string;
@@ -44,6 +49,7 @@ interface ActiveJob {
   startedAt: string;
   bitrate: number | null;
   fps: number | null;
+  destinationHealth: Record<string, DestinationHealthEntry> | null;
 }
 
 interface Channel {
@@ -420,7 +426,7 @@ export default function ChannelDetailPage() {
               <CardTitle className="text-base flex items-center gap-2">
                 <Activity className="w-4 h-4" />Stream Health
               </CardTitle>
-              <RefreshCw className="w-4 h-4 text-muted-foreground animate-spin" style={{ animationDuration: "5s" }} />
+              {isLive && <RefreshCw className="w-4 h-4 text-muted-foreground animate-spin" style={{ animationDuration: "5s" }} />}
             </CardHeader>
             <CardContent>
               {isLive ? (() => {
@@ -428,25 +434,68 @@ export default function ChannelDetailPage() {
                 const jobFps = channel.activeJob?.fps;
                 const jobStarted = channel.activeJob?.startedAt;
                 const uptimeSec = jobStarted ? Math.floor((Date.now() - new Date(jobStarted).getTime()) / 1000) : null;
+                const destHealth = channel.activeJob?.destinationHealth;
+                const jobDests = (channel.activeJob?.destinations ?? []) as Array<{id: number; name: string; platform: string}>;
                 return (
-                  <div className="grid grid-cols-3 gap-6">
-                    <div>
-                      <p className="text-xs text-muted-foreground">Bitrate</p>
-                      <p className="text-2xl font-mono font-bold">
-                        {jobBitrate ? `${Math.round(jobBitrate / 1000)}k` : "—"}
-                      </p>
-                      <p className="text-xs text-muted-foreground">kbps</p>
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-3 gap-6">
+                      <div>
+                        <p className="text-xs text-muted-foreground">Bitrate</p>
+                        <p className="text-2xl font-mono font-bold">
+                          {jobBitrate ? `${Math.round(jobBitrate / 1000)}k` : "—"}
+                        </p>
+                        <p className="text-xs text-muted-foreground">kbps</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">FPS</p>
+                        <p className="text-2xl font-mono font-bold">{jobFps ?? "—"}</p>
+                        <p className="text-xs text-muted-foreground">frames/sec</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Uptime</p>
+                        <p className="text-2xl font-mono font-bold">{uptimeSec != null ? formatUptime(uptimeSec) : "—"}</p>
+                        <p className="text-xs text-muted-foreground">duration</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">FPS</p>
-                      <p className="text-2xl font-mono font-bold">{jobFps ?? "—"}</p>
-                      <p className="text-xs text-muted-foreground">frames/sec</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">Uptime</p>
-                      <p className="text-2xl font-mono font-bold">{uptimeSec != null ? formatUptime(uptimeSec) : "—"}</p>
-                      <p className="text-xs text-muted-foreground">duration</p>
-                    </div>
+
+                    {jobDests.length > 0 && (
+                      <div className="space-y-2 pt-2 border-t border-border/50">
+                        <p className="text-xs text-muted-foreground font-medium">Destination Status</p>
+                        <div className="space-y-1.5">
+                          {jobDests.map((d) => {
+                            const health = destHealth?.[String(d.id)];
+                            const isConnected = health?.status === "connected";
+                            const isError = health?.status === "error";
+                            const statusColor = isError ? "text-red-400" : isConnected ? "text-green-400" : "text-yellow-400";
+                            const statusLabel = isError ? "Error" : isConnected ? "Connected" : "Pending";
+                            const platformIcons: Record<string, string> = {
+                              youtube: "▶",
+                              facebook: "f",
+                              twitch: "⬡",
+                              custom_rtmp: "◉",
+                            };
+                            return (
+                              <div key={d.id} className="flex items-center justify-between rounded-md bg-accent/20 px-3 py-2">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs w-5 text-center opacity-60">{platformIcons[d.platform] ?? "◉"}</span>
+                                  <span className="text-sm font-medium">{d.name}</span>
+                                  <span className="text-[10px] uppercase text-muted-foreground px-1.5 py-0.5 rounded bg-accent/40">{d.platform}</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  {jobBitrate ? (
+                                    <span className="text-xs font-mono text-muted-foreground">{Math.round(jobBitrate / 1000)}k</span>
+                                  ) : null}
+                                  <span className={`inline-flex items-center gap-1 text-xs font-medium ${statusColor}`}>
+                                    <span className={`w-1.5 h-1.5 rounded-full ${isError ? "bg-red-400" : isConnected ? "bg-green-400 animate-pulse" : "bg-yellow-400"}`} />
+                                    {statusLabel}
+                                  </span>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })() : (
