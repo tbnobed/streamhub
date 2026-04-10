@@ -35,7 +35,7 @@ export function generateUploadFilename(originalName: string): string {
 export class LocalStorageService {
   getAbsolutePath(objectPath: string): string {
     const relative = objectPath.replace(/^\/objects\//, "");
-    return path.join(UPLOAD_DIR, relative);
+    return path.resolve(UPLOAD_DIR, relative);
   }
 
   async getFileStream(objectPath: string): Promise<{ stream: ReadStream; size: number; contentType: string }> {
