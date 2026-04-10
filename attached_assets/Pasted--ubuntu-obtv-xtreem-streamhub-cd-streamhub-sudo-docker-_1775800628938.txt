@@ -1,0 +1,147 @@
+
+ubuntu@obtv-xtreem:~/streamhub$
+cd ~/streamhub
+sudo docker-compose -f deploy/docker-compose.yml --env-file deploy/.env down
+sudo docker-compose -f deploy/docker-compose.yml --env-file deploy/.env up -d
+Recreating: command not found
+ERROR:: command not found
+ERROR:: command not found
+-bash: syntax error near unexpected token `most'
+-bash: syntax error near unexpected token `newline'
+-bash: syntax error near unexpected token `load_entry_point'
+Command 'File' not found, did you mean:
+  command 'zile' from deb zile (2.6.2-2)
+  command 'file' from deb file (1:5.41-3ubuntu0.1)
+  command 'vile' from deb vile (9.8v-1build1)
+  command 'kile' from deb kile (4:2.9.93-2)
+Try: sudo apt install <deb name>
+-bash: syntax error near unexpected token `File'
+-bash: syntax error near unexpected token `command,'
+Command 'File' not found, did you mean:
+  command 'vile' from deb vile (9.8v-1build1)
+  command 'zile' from deb zile (2.6.2-2)
+  command 'kile' from deb kile (4:2.9.93-2)
+  command 'file' from deb file (1:5.41-3ubuntu0.1)
+Try: sudo apt install <deb name>
+-bash: syntax error near unexpected token `('
+Command 'File' not found, did you mean:
+  command 'zile' from deb zile (2.6.2-2)
+  command 'vile' from deb vile (9.8v-1build1)
+  command 'kile' from deb kile (4:2.9.93-2)
+  command 'file' from deb file (1:5.41-3ubuntu0.1)
+Try: sudo apt install <deb name>
+-bash: syntax error near unexpected token `('
+Command 'File' not found, did you mean:
+  command 'vile' from deb vile (9.8v-1build1)
+  command 'file' from deb file (1:5.41-3ubuntu0.1)
+  command 'kile' from deb kile (4:2.9.93-2)
+  command 'zile' from deb zile (2.6.2-2)
+Try: sudo apt install <deb name>
+-bash: syntax error near unexpected token `('
+Command 'File' not found, did you mean:
+  command 'file' from deb file (1:5.41-3ubuntu0.1)
+  command 'kile' from deb kile (4:2.9.93-2)
+  command 'vile' from deb vile (9.8v-1build1)
+  command 'zile' from deb zile (2.6.2-2)
+Try: sudo apt install <deb name>
+-bash: syntax error near unexpected token `('
+Command 'File' not found, did you mean:
+  command 'vile' from deb vile (9.8v-1build1)
+  command 'zile' from deb zile (2.6.2-2)
+  command 'kile' from deb kile (4:2.9.93-2)
+  command 'file' from deb file (1:5.41-3ubuntu0.1)
+Try: sudo apt install <deb name>
+raise: command not found
+Command 'File' not found, did you mean:
+  command 'zile' from deb zile (2.6.2-2)
+  command 'vile' from deb vile (9.8v-1build1)
+  command 'kile' from deb kile (4:2.9.93-2)
+  command 'file' from deb file (1:5.41-3ubuntu0.1)
+Try: sudo apt install <deb name>
+-bash: syntax error near unexpected token `('
+Command 'File' not found, did you mean:
+  command 'file' from deb file (1:5.41-3ubuntu0.1)
+  command 'vile' from deb vile (9.8v-1build1)
+  command 'kile' from deb kile (4:2.9.93-2)
+  command 'zile' from deb zile (2.6.2-2)
+Try: sudo apt install <deb name>
+-bash: syntax error near unexpected token `('
+Command 'File' not found, did you mean:
+  command 'vile' from deb vile (9.8v-1build1)
+  command 'kile' from deb kile (4:2.9.93-2)
+  command 'file' from deb file (1:5.41-3ubuntu0.1)
+  command 'zile' from deb zile (2.6.2-2)
+Try: sudo apt install <deb name>
+-bash: syntax error near unexpected token `('
+Command 'File' not found, did you mean:
+  command 'kile' from deb kile (4:2.9.93-2)
+  command 'zile' from deb zile (2.6.2-2)
+  command 'vile' from deb vile (9.8v-1build1)
+  command 'file' from deb file (1:5.41-3ubuntu0.1)
+Try: sudo apt install <deb name>
+-bash: syntax error near unexpected token `('
+Command 'File' not found, did you mean:
+  command 'zile' from deb zile (2.6.2-2)
+  command 'file' from deb file (1:5.41-3ubuntu0.1)
+  command 'kile' from deb kile (4:2.9.93-2)
+  command 'vile' from deb vile (9.8v-1build1)
+Try: sudo apt install <deb name>
+raise: command not found
+Command 'File' not found, did you mean:
+  command 'kile' from deb kile (4:2.9.93-2)
+  command 'file' from deb file (1:5.41-3ubuntu0.1)
+  command 'vile' from deb vile (9.8v-1build1)
+  command 'zile' from deb zile (2.6.2-2)
+Try: sudo apt install <deb name>
+-bash: syntax error near unexpected token `('
+Command 'File' not found, did you mean:
+  command 'file' from deb file (1:5.41-3ubuntu0.1)
+  command 'kile' from deb kile (4:2.9.93-2)
+  command 'zile' from deb zile (2.6.2-2)
+  command 'vile' from deb vile (9.8v-1build1)
+Try: sudo apt install <deb name>
+-bash: syntax error near unexpected token `('
+Command 'File' not found, did you mean:
+  command 'file' from deb file (1:5.41-3ubuntu0.1)
+  command 'zile' from deb zile (2.6.2-2)
+  command 'vile' from deb vile (9.8v-1build1)
+  command 'kile' from deb kile (4:2.9.93-2)
+Try: sudo apt install <deb name>
+-bash: syntax error near unexpected token `('
+Command 'File' not found, did you mean:
+  command 'kile' from deb kile (4:2.9.93-2)
+  command 'zile' from deb zile (2.6.2-2)
+  command 'vile' from deb vile (9.8v-1build1)
+  command 'file' from deb file (1:5.41-3ubuntu0.1)
+Try: sudo apt install <deb name>
+-bash: syntax error near unexpected token `('
+Command 'File' not found, did you mean:
+  command 'zile' from deb zile (2.6.2-2)
+  command 'vile' from deb vile (9.8v-1build1)
+  command 'file' from deb file (1:5.41-3ubuntu0.1)
+  command 'kile' from deb kile (4:2.9.93-2)
+Try: sudo apt install <deb name>
+-bash: syntax error near unexpected token `('
+Command 'File' not found, did you mean:
+  command 'vile' from deb vile (9.8v-1build1)
+  command 'file' from deb file (1:5.41-3ubuntu0.1)
+  command 'zile' from deb zile (2.6.2-2)
+  command 'kile' from deb kile (4:2.9.93-2)
+Try: sudo apt install <deb name>
+-bash: syntax error near unexpected token `('
+Command 'File' not found, did you mean:
+  command 'file' from deb file (1:5.41-3ubuntu0.1)
+  command 'kile' from deb kile (4:2.9.93-2)
+  command 'vile' from deb vile (9.8v-1build1)
+  command 'zile' from deb zile (2.6.2-2)
+Try: sudo apt install <deb name>
+-bash: syntax error near unexpected token `('
+Command 'File' not found, did you mean:
+  command 'file' from deb file (1:5.41-3ubuntu0.1)
+  command 'zile' from deb zile (2.6.2-2)
+  command 'kile' from deb kile (4:2.9.93-2)
+  command 'vile' from deb vile (9.8v-1build1)
+Try: sudo apt install <deb name>
+-bash: syntax error near unexpected token `'Volumes''
+KeyError:: command not found
+-bash: ubuntu@obtv-xtreem:~/streamhub$: No such file or directory
