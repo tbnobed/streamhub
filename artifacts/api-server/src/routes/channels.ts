@@ -283,7 +283,7 @@ router.post("/channels/:id/start", async (req, res): Promise<void> => {
   });
 
   const ffmpegCmd = [
-    "ffmpeg", "-hide_banner", "-loglevel", "warning", "-stats", "-re",
+    "ffmpeg", "-hide_banner", "-loglevel", "info", "-stats", "-re",
     "-i", sourceRef,
     "-c:v", "copy", "-c:a", "copy",
     ...ffmpegOutputArgs,

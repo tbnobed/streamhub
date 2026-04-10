@@ -106,7 +106,8 @@ export function buildPlaylistCommand(opts: PlaylistPlayoutOptions & { protocolWh
   const cmd = [
     "ffmpeg",
     "-hide_banner",
-    "-loglevel", "warning",
+    "-loglevel", "info",
+    "-stats",
     "-re",
   ];
 

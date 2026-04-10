@@ -124,7 +124,7 @@ async function startChannel(channelId: number): Promise<void> {
   });
 
   const ffmpegCmd = [
-    "ffmpeg", "-hide_banner", "-loglevel", "warning", "-stats", "-re",
+    "ffmpeg", "-hide_banner", "-loglevel", "info", "-stats", "-re",
     "-i", sourceRef, "-c:v", "copy", "-c:a", "copy",
     ...ffmpegOutputArgs,
   ].join(" ");
