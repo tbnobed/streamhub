@@ -9,7 +9,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Share2, Plus, Trash2, Youtube, Facebook, Twitch, MonitorPlay } from "lucide-react";
+import { Share2, Plus, Trash2, Youtube, Facebook, Twitch, MonitorPlay, Pencil } from "lucide-react";
 import { useState } from "react";
 import { apiBase } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
@@ -61,11 +61,16 @@ function PlatformIcon({ platform }: { platform: string }) {
   return <Icon className="w-5 h-5 text-primary" />;
 }
 
+const emptyForm = { name: "", platform: "youtube", streamUrl: "", streamKey: "" };
+
 export default function DestinationsPage() {
   const qc = useQueryClient();
   const { toast } = useToast();
   const [createOpen, setCreateOpen] = useState(false);
-  const [form, setForm] = useState({ name: "", platform: "youtube", streamUrl: "", streamKey: "" });
+  const [editOpen, setEditOpen] = useState(false);
+  const [editingDest, setEditingDest] = useState<Destination | null>(null);
+  const [form, setForm] = useState(emptyForm);
+  const [editForm, setEditForm] = useState(emptyForm);
 
   const { data: destinations = [], isLoading } = useQuery<Destination[]>({
     queryKey: ["destinations"],
@@ -76,9 +81,21 @@ export default function DestinationsPage() {
     mutationFn: (body: typeof form) => apiFetch<Destination>("/destinations", { method: "POST", body: JSON.stringify(body) }),
     onSuccess: () => {
       setCreateOpen(false);
-      setForm({ name: "", platform: "youtube", streamUrl: "", streamKey: "" });
+      setForm(emptyForm);
       qc.invalidateQueries({ queryKey: ["destinations"] });
       setTimeout(() => toast({ title: "Destination created" }), 100);
+    },
+    onError: (e: Error) => toast({ variant: "destructive", title: "Error", description: e.message }),
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, body }: { id: number; body: Record<string, unknown> }) =>
+      apiFetch<Destination>(`/destinations/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+    onSuccess: () => {
+      setEditOpen(false);
+      setEditingDest(null);
+      qc.invalidateQueries({ queryKey: ["destinations"] });
+      toast({ title: "Destination updated" });
     },
     onError: (e: Error) => toast({ variant: "destructive", title: "Error", description: e.message }),
   });
@@ -91,12 +108,40 @@ export default function DestinationsPage() {
 
   const toggleMutation = useMutation({
     mutationFn: ({ id, enabled }: { id: number; enabled: boolean }) =>
-      apiFetch(`/destinations/${id}`, { method: "PATCH", body: JSON.stringify({ enabled }) }),
+      apiFetch(`/destinations/${id}`, { method: "PATCH", body: JSON.stringify({ isActive: enabled }) }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["destinations"] }),
   });
 
   const handlePlatformChange = (platform: string) => {
     setForm({ ...form, platform, streamUrl: PLATFORM_RTMP_URLS[platform] ?? "" });
+  };
+
+  const handleEditPlatformChange = (platform: string) => {
+    setEditForm({ ...editForm, platform, streamUrl: PLATFORM_RTMP_URLS[platform] ?? "" });
+  };
+
+  const openEdit = (dest: Destination) => {
+    setEditingDest(dest);
+    setEditForm({
+      name: dest.name,
+      platform: dest.platform,
+      streamUrl: dest.streamUrl,
+      streamKey: "",
+    });
+    setEditOpen(true);
+  };
+
+  const handleSaveEdit = () => {
+    if (!editingDest) return;
+    const body: Record<string, unknown> = {
+      name: editForm.name,
+      platform: editForm.platform,
+      streamUrl: editForm.streamUrl,
+    };
+    if (editForm.streamKey) {
+      body.streamKey = editForm.streamKey;
+    }
+    updateMutation.mutate({ id: editingDest.id, body });
   };
 
   return (
@@ -146,6 +191,9 @@ export default function DestinationsPage() {
                       checked={dest.enabled}
                       onCheckedChange={(v) => toggleMutation.mutate({ id: dest.id, enabled: v })}
                     />
+                    <Button size="icon" variant="ghost" onClick={() => openEdit(dest)}>
+                      <Pencil className="w-4 h-4 text-muted-foreground" />
+                    </Button>
                     <Button size="icon" variant="ghost" onClick={() => { if (confirm("Delete destination?")) deleteMutation.mutate(dest.id); }}>
                       <Trash2 className="w-4 h-4 text-muted-foreground" />
                     </Button>
@@ -190,6 +238,50 @@ export default function DestinationsPage() {
             <Button variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
             <Button disabled={!form.name || !form.streamUrl || createMutation.isPending} onClick={() => createMutation.mutate(form)}>
               {createMutation.isPending ? "Adding…" : "Add Destination"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={editOpen} onOpenChange={(v) => { setEditOpen(v); if (!v) setEditingDest(null); }}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Edit Destination</DialogTitle></DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Name</Label>
+              <Input value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} />
+            </div>
+            <div className="space-y-2">
+              <Label>Platform</Label>
+              <Select value={editForm.platform} onValueChange={handleEditPlatformChange}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="youtube">YouTube Live</SelectItem>
+                  <SelectItem value="facebook">Facebook Live</SelectItem>
+                  <SelectItem value="twitch">Twitch</SelectItem>
+                  <SelectItem value="custom">Custom RTMP</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>RTMP URL</Label>
+              <Input value={editForm.streamUrl} onChange={(e) => setEditForm({ ...editForm, streamUrl: e.target.value })} />
+            </div>
+            <div className="space-y-2">
+              <Label>Stream Key</Label>
+              <Input
+                type="password"
+                value={editForm.streamKey}
+                onChange={(e) => setEditForm({ ...editForm, streamKey: e.target.value })}
+                placeholder="Leave blank to keep current key"
+              />
+              <p className="text-xs text-muted-foreground">Only fill this in if you want to change the key</p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setEditOpen(false); setEditingDest(null); }}>Cancel</Button>
+            <Button disabled={!editForm.name || !editForm.streamUrl || updateMutation.isPending} onClick={handleSaveEdit}>
+              {updateMutation.isPending ? "Saving…" : "Save Changes"}
             </Button>
           </DialogFooter>
         </DialogContent>
