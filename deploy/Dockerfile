@@ -11,9 +11,12 @@ COPY lib/api-client-react/package.json lib/api-client-react/
 COPY lib/object-storage-web/package.json lib/object-storage-web/
 COPY artifacts/api-server/package.json artifacts/api-server/
 COPY artifacts/social-playout/package.json artifacts/social-playout/
-COPY artifacts/mockup-sandbox/package.json artifacts/mockup-sandbox/
 COPY worker/package.json worker/
-COPY scripts/package.json scripts/
+
+RUN mkdir -p artifacts/mockup-sandbox scripts && \
+    echo '{"name":"@workspace/mockup-sandbox","version":"0.0.0","private":true}' > artifacts/mockup-sandbox/package.json && \
+    echo '{"name":"@workspace/scripts","version":"0.0.0","private":true}' > scripts/package.json
+
 RUN pnpm install --frozen-lockfile
 
 FROM deps AS source
