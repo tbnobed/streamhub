@@ -59,7 +59,10 @@ async function startChannel(channelId: number): Promise<void> {
 
   if (channel.sourceMode === "live_input" && channel.activeLiveInputId) {
     const [liveInput] = await db.select().from(liveInputsTable).where(eq(liveInputsTable.id, channel.activeLiveInputId));
-    if (!liveInput) return;
+    if (!liveInput) {
+      logger.warn({ channelId, liveInputId: channel.activeLiveInputId }, "Scheduler: cannot start channel, live input not found");
+      return;
+    }
     sourceRef = `rtmp://${ingestHost}/live/${liveInput.streamKey}`;
   } else if (channel.sourceMode === "playlist" && channel.activePlaylistId) {
     const playlistItems = await db
@@ -70,7 +73,10 @@ async function startChannel(channelId: number): Promise<void> {
       .orderBy(asc(playlistItemsTable.position));
 
     const rawPaths = playlistItems.map(item => item.assetFilePath).filter((fp): fp is string => !!fp);
-    if (rawPaths.length === 0) return;
+    if (rawPaths.length === 0) {
+      logger.warn({ channelId, playlistId: channel.activePlaylistId }, "Scheduler: cannot start channel, playlist has no valid assets");
+      return;
+    }
 
     const storageService = new LocalStorageService();
     const filePaths: string[] = [];
