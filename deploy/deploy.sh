@@ -13,6 +13,18 @@ log()  { echo -e "${GREEN}[DEPLOY]${NC} $*"; }
 warn() { echo -e "${YELLOW}[WARN]${NC}  $*"; }
 err()  { echo -e "${RED}[ERROR]${NC} $*" >&2; }
 
+detect_compose() {
+    if docker compose version &>/dev/null; then
+        COMPOSE_CMD="docker compose"
+    elif command -v docker-compose &>/dev/null; then
+        COMPOSE_CMD="docker-compose"
+    else
+        err "Neither 'docker compose' nor 'docker-compose' found. Install docker-compose-plugin or docker-compose."
+        exit 1
+    fi
+    log "Using compose command: $COMPOSE_CMD"
+}
+
 load_env() {
     local env_file="$SCRIPT_DIR/.env"
     if [[ ! -f "$env_file" ]]; then
@@ -46,6 +58,10 @@ install_prereqs() {
 install_docker() {
     if command -v docker &>/dev/null; then
         log "Docker already installed: $(docker --version)"
+        if ! docker compose version &>/dev/null && ! command -v docker-compose &>/dev/null; then
+            log "Installing docker-compose..."
+            apt-get install -y docker-compose
+        fi
         return
     fi
 
@@ -96,12 +112,12 @@ run_db_migrate() {
     load_env
 
     log "Waiting for PostgreSQL to be healthy..."
-    docker compose -f "$SCRIPT_DIR/docker-compose.yml" --env-file "$SCRIPT_DIR/.env" up -d postgres
+    $COMPOSE_CMD -f "$SCRIPT_DIR/docker-compose.yml" --env-file "$SCRIPT_DIR/.env" up -d postgres
 
     local retries=30
     local pg_user="${POSTGRES_USER:-playout}"
     while [[ $retries -gt 0 ]]; do
-        if docker compose -f "$SCRIPT_DIR/docker-compose.yml" --env-file "$SCRIPT_DIR/.env" \
+        if $COMPOSE_CMD -f "$SCRIPT_DIR/docker-compose.yml" --env-file "$SCRIPT_DIR/.env" \
             exec -T postgres pg_isready -U "$pg_user" &>/dev/null; then
             break
         fi
@@ -120,7 +136,7 @@ run_db_migrate() {
     local pg_db="${POSTGRES_DB:-playout}"
     local db_url="postgresql://${pg_user}:${pg_password}@postgres:5432/${pg_db}"
 
-    docker compose -f "$SCRIPT_DIR/docker-compose.yml" --env-file "$SCRIPT_DIR/.env" \
+    $COMPOSE_CMD -f "$SCRIPT_DIR/docker-compose.yml" --env-file "$SCRIPT_DIR/.env" \
         run --rm -e DATABASE_URL="$db_url" \
         api sh -c "cd /app/lib/db && npx drizzle-kit push --force --config ./drizzle.config.ts"
 
@@ -129,13 +145,13 @@ run_db_migrate() {
 
 build_images() {
     log "Building Docker images (this may take several minutes on first run)..."
-    docker compose -f "$SCRIPT_DIR/docker-compose.yml" --env-file "$SCRIPT_DIR/.env" build
+    $COMPOSE_CMD -f "$SCRIPT_DIR/docker-compose.yml" --env-file "$SCRIPT_DIR/.env" build
     log "Docker images built successfully."
 }
 
 start_services() {
     log "Starting all services..."
-    docker compose -f "$SCRIPT_DIR/docker-compose.yml" --env-file "$SCRIPT_DIR/.env" up -d
+    $COMPOSE_CMD -f "$SCRIPT_DIR/docker-compose.yml" --env-file "$SCRIPT_DIR/.env" up -d
     log "All services started."
 }
 
@@ -145,7 +161,7 @@ show_status() {
     log "  Social Playout Manager - Deployment Status"
     log "============================================"
     echo ""
-    docker compose -f "$SCRIPT_DIR/docker-compose.yml" --env-file "$SCRIPT_DIR/.env" ps
+    $COMPOSE_CMD -f "$SCRIPT_DIR/docker-compose.yml" --env-file "$SCRIPT_DIR/.env" ps
     echo ""
 
     load_env
@@ -157,10 +173,10 @@ show_status() {
     log "Default login:    admin / admin123"
     echo ""
     log "Useful commands:"
-    echo "  View logs:       docker compose -f $SCRIPT_DIR/docker-compose.yml --env-file $SCRIPT_DIR/.env logs -f"
-    echo "  Stop:            docker compose -f $SCRIPT_DIR/docker-compose.yml --env-file $SCRIPT_DIR/.env down"
-    echo "  Restart:         docker compose -f $SCRIPT_DIR/docker-compose.yml --env-file $SCRIPT_DIR/.env restart"
-    echo "  Rebuild & start: docker compose -f $SCRIPT_DIR/docker-compose.yml --env-file $SCRIPT_DIR/.env up -d --build"
+    echo "  View logs:       $COMPOSE_CMD -f $SCRIPT_DIR/docker-compose.yml --env-file $SCRIPT_DIR/.env logs -f"
+    echo "  Stop:            $COMPOSE_CMD -f $SCRIPT_DIR/docker-compose.yml --env-file $SCRIPT_DIR/.env down"
+    echo "  Restart:         $COMPOSE_CMD -f $SCRIPT_DIR/docker-compose.yml --env-file $SCRIPT_DIR/.env restart"
+    echo "  Rebuild & start: $COMPOSE_CMD -f $SCRIPT_DIR/docker-compose.yml --env-file $SCRIPT_DIR/.env up -d --build"
     echo ""
 }
 
@@ -171,6 +187,7 @@ main() {
     check_root
     install_prereqs
     install_docker
+    detect_compose
 
     setup_env
 

@@ -20,26 +20,38 @@ load_env() {
     done < "$env_file"
 }
 
+detect_compose() {
+    if docker compose version &>/dev/null; then
+        COMPOSE_CMD="docker compose"
+    elif command -v docker-compose &>/dev/null; then
+        COMPOSE_CMD="docker-compose"
+    else
+        echo "[ERROR] Neither 'docker compose' nor 'docker-compose' found." >&2
+        exit 1
+    fi
+}
+
 load_env
+detect_compose
 
 echo "[UPDATE] Pulling latest code..."
 cd "$(dirname "$SCRIPT_DIR")"
 git pull
 
 echo "[UPDATE] Rebuilding and restarting services..."
-docker compose -f "$SCRIPT_DIR/docker-compose.yml" --env-file "$SCRIPT_DIR/.env" up -d --build
+$COMPOSE_CMD -f "$SCRIPT_DIR/docker-compose.yml" --env-file "$SCRIPT_DIR/.env" up -d --build
 
 echo "[UPDATE] Running database migrations..."
 PG_USER="${POSTGRES_USER:-playout}"
 PG_PASS="${POSTGRES_PASSWORD:-}"
 PG_DB="${POSTGRES_DB:-playout}"
 
-docker compose -f "$SCRIPT_DIR/docker-compose.yml" --env-file "$SCRIPT_DIR/.env" \
+$COMPOSE_CMD -f "$SCRIPT_DIR/docker-compose.yml" --env-file "$SCRIPT_DIR/.env" \
     run --rm -e DATABASE_URL="postgresql://${PG_USER}:${PG_PASS}@postgres:5432/${PG_DB}" \
     api sh -c "cd /app/lib/db && npx drizzle-kit push --force --config ./drizzle.config.ts"
 
 echo "[UPDATE] Restarting API to pick up schema changes..."
-docker compose -f "$SCRIPT_DIR/docker-compose.yml" --env-file "$SCRIPT_DIR/.env" restart api worker
+$COMPOSE_CMD -f "$SCRIPT_DIR/docker-compose.yml" --env-file "$SCRIPT_DIR/.env" restart api worker
 
 echo "[UPDATE] Done."
-docker compose -f "$SCRIPT_DIR/docker-compose.yml" --env-file "$SCRIPT_DIR/.env" ps
+$COMPOSE_CMD -f "$SCRIPT_DIR/docker-compose.yml" --env-file "$SCRIPT_DIR/.env" ps
