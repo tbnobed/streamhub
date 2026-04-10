@@ -22,7 +22,8 @@ function generateStreamKey(): string {
 function buildIngestUrl(protocol: string, streamKey: string): string {
   const host = process.env.INGEST_HOST ?? "ingest.yourdomain.com";
   if (protocol === "srt") {
-    return `srt://${host}:9000?streamid=${streamKey}`;
+    const srtPort = process.env.SRT_INGEST_PORT ?? "10080";
+    return `srt://${host}:${srtPort}?streamid=#!::r=live/${streamKey},m=publish`;
   }
   return `rtmp://${host}/live/${streamKey}`;
 }
