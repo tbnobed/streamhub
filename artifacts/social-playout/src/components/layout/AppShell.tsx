@@ -13,7 +13,6 @@ import {
   LogOut,
   Menu,
   X,
-  Signal,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -50,9 +49,7 @@ export function AppShell({ children }: AppShellProps) {
       >
         {/* Logo */}
         <div className="h-16 px-6 flex items-center gap-3 border-b border-border">
-          <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-            <Signal className="w-4 h-4 text-primary-foreground" />
-          </div>
+          <img src="/logo.png" alt="OBR" className="w-8 h-8 rounded-lg object-contain" />
           <div>
             <div className="font-bold text-sm leading-none">Social Playout</div>
             <div className="text-xs text-muted-foreground leading-none mt-1">Operations Center</div>

@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Signal } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 export default function LoginPage() {
@@ -36,9 +35,7 @@ export default function LoginPage() {
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <div className="w-full max-w-sm space-y-6">
         <div className="text-center space-y-2">
-          <div className="w-14 h-14 rounded-2xl bg-primary flex items-center justify-center mx-auto">
-            <Signal className="w-7 h-7 text-primary-foreground" />
-          </div>
+          <img src="/logo.png" alt="OBR" className="w-16 h-16 rounded-2xl mx-auto object-contain" />
           <h1 className="text-2xl font-bold">Social Playout Manager</h1>
           <p className="text-muted-foreground text-sm">Streaming Operations Center</p>
         </div>
