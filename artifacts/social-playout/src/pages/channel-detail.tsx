@@ -551,7 +551,8 @@ export default function ChannelDetailPage() {
                             const isConnected = health?.status === "connected";
                             const isError = health?.status === "error";
                             const statusColor = isError ? "text-red-400" : isConnected ? "text-green-400" : "text-yellow-400";
-                            const statusLabel = isError ? "Error" : isConnected ? "Connected" : "Pending";
+                            const isConnecting = health?.status === "connecting";
+                            const statusLabel = isError ? "Error" : isConnected ? "Connected" : isConnecting ? "Connecting" : "Pending";
                             const platformIcons: Record<string, string> = {
                               youtube: "▶",
                               facebook: "f",

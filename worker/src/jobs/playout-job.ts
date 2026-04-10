@@ -254,8 +254,13 @@ export class PlayoutJobRunner {
     for (let i = 0; i < destinations.length; i++) {
       const d = destinations[i]!;
       const key = String((d as Record<string, unknown>).id ?? i);
-      destHealth[key] = { status: "connected" };
+      destHealth[key] = { status: "connecting" };
     }
+
+    await this.api.updateJobStatus(this.job.id, "running", {
+      pid,
+      destinationHealth: destHealth,
+    });
 
     this.singleProcess.stderr?.on("data", (data: Buffer) => {
       const text = data.toString();
@@ -289,6 +294,16 @@ export class PlayoutJobRunner {
         }
       }
 
+      if (lastBitrate > 0) {
+        for (let i = 0; i < destinations.length; i++) {
+          const d = destinations[i]!;
+          const key = String((d as Record<string, unknown>).id ?? i);
+          if (destHealth[key]?.status === "connecting") {
+            destHealth[key] = { status: "connected" };
+          }
+        }
+      }
+
       const now = Date.now();
       if (lastBitrate > 0 && now - lastStatsSentAt >= 5000) {
         lastStatsSentAt = now;
@@ -309,9 +324,27 @@ export class PlayoutJobRunner {
         return;
       }
 
+      const destinations = this.job.destinations ?? [];
+      const errorHealth: Record<string, { status: string; error?: string }> = {};
+      for (let i = 0; i < destinations.length; i++) {
+        const d = destinations[i]!;
+        const key = String((d as Record<string, unknown>).id ?? i);
+        errorHealth[key] = { status: "error", error: `FFmpeg exited with code ${code}` };
+      }
+
       if (this.restartCount < this.maxRestarts) {
         this.restartCount++;
         logger.info({ jobId: this.job.id, restartCount: this.restartCount }, "Restarting FFmpeg");
+
+        const reconnectHealth: Record<string, { status: string; error?: string }> = {};
+        for (let i = 0; i < destinations.length; i++) {
+          const d = destinations[i]!;
+          const key = String((d as Record<string, unknown>).id ?? i);
+          reconnectHealth[key] = { status: "connecting" };
+        }
+        await this.api.updateJobStatus(this.job.id, "running", {
+          destinationHealth: reconnectHealth,
+        });
 
         await this.api.submitEvent({
           channelId: this.job.channelId,
@@ -326,6 +359,7 @@ export class PlayoutJobRunner {
         logger.error({ jobId: this.job.id }, "Max restarts reached, job failed");
         await this.api.updateJobStatus(this.job.id, "failed", {
           errorMessage: `Process exited after ${this.maxRestarts} restart attempts`,
+          destinationHealth: errorHealth,
         });
         await this.api.submitEvent({
           channelId: this.job.channelId,
