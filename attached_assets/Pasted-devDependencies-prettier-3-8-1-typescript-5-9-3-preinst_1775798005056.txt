@@ -1,0 +1,98 @@
+devDependencies:
++ prettier 3.8.1
++ typescript 5.9.3
+
+. preinstall$ sh -c 'rm -f package-lock.json yarn.lock; case "$npm_config_user_agent" in pnpm/*) ;; *) echo "Use pnpm instead" >&2; exit 1 ;; esac'
+. preinstall: Done
+Done in 8.7s using pnpm v9.15.9
+ ---> Removed intermediate container 5ca24b0173e6
+ ---> d84758e37b66
+Step 17/50 : FROM deps AS source
+ ---> d84758e37b66
+Step 18/50 : COPY tsconfig.json tsconfig.base.json ./
+ ---> aa87a32b88dc
+Step 19/50 : COPY lib/ lib/
+ ---> f62d6b42958a
+Step 20/50 : COPY artifacts/api-server/ artifacts/api-server/
+ ---> 2597cd43ffed
+Step 21/50 : COPY artifacts/social-playout/ artifacts/social-playout/
+ ---> f4cd40153013
+Step 22/50 : COPY worker/ worker/
+ ---> 0ccb9c1cfe17
+Step 23/50 : FROM source AS build-api
+ ---> 0ccb9c1cfe17
+Step 24/50 : WORKDIR /app/artifacts/api-server
+ ---> Running in e14777b56b44
+ ---> Removed intermediate container e14777b56b44
+ ---> 0cbd40fffc5c
+Step 25/50 : RUN node build.mjs
+ ---> Running in 9081d8e5b8bd
+
+  dist/index.mjs                       2.7mb ⚠️
+  dist/pino-worker.mjs               153.4kb
+  dist/pino-file.mjs                 142.0kb
+  dist/pino-pretty.mjs               114.6kb
+  dist/thread-stream-worker.mjs        7.3kb
+  dist/index.mjs.map                   4.7mb
+  dist/pino-worker.mjs.map           256.9kb
+  dist/pino-file.mjs.map             229.0kb
+  dist/pino-pretty.mjs.map           203.9kb
+  dist/thread-stream-worker.mjs.map   12.0kb
+
+⚡ Done in 358ms
+ ---> Removed intermediate container 9081d8e5b8bd
+ ---> 2990f2a69ca2
+Step 26/50 : FROM source AS build-frontend
+ ---> 0ccb9c1cfe17
+Step 27/50 : ENV BASE_PATH=/
+ ---> Running in 1976748ec722
+ ---> Removed intermediate container 1976748ec722
+ ---> eeadf8ec7272
+Step 28/50 : ENV PORT=5173
+ ---> Running in bbd55165dc51
+ ---> Removed intermediate container bbd55165dc51
+ ---> 9d6fcd7ff10d
+Step 29/50 : ENV NODE_ENV=production
+ ---> Running in cd5143049596
+ ---> Removed intermediate container cd5143049596
+ ---> b4556a373c1d
+Step 30/50 : WORKDIR /app/artifacts/social-playout
+ ---> Running in e2fe511c9192
+ ---> Removed intermediate container e2fe511c9192
+ ---> d6cae9fd8404
+Step 31/50 : RUN npx vite build --config vite.config.ts
+ ---> Running in e7c9a4ee6e57
+vite v7.3.1 building client environment for production...
+transforming...
+src/components/ui/tooltip.tsx (2:0): Error when using sourcemap for reporting an error: Can't resolve original location of error.
+src/components/ui/label.tsx (2:0): Error when using sourcemap for reporting an error: Can't resolve original location of error.
+src/components/ui/select.tsx (2:0): Error when using sourcemap for reporting an error: Can't resolve original location of error.
+src/components/ui/progress.tsx (2:0): Error when using sourcemap for reporting an error: Can't resolve original location of error.
+✓ 1848 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/public/index.html                   0.74 kB │ gzip:   0.42 kB
+dist/public/assets/index-DbCT2e9r.css  102.04 kB │ gzip:  16.50 kB
+dist/public/assets/mpegts-sjopCQyI.js  273.93 kB │ gzip:  63.74 kB
+dist/public/assets/index-DAOenvWE.js   432.36 kB │ gzip: 130.54 kB
+✓ built in 5.03s
+npm notice
+npm notice New major version of npm available! 10.8.2 -> 11.12.1
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.12.1
+npm notice To update run: npm install -g npm@11.12.1
+npm notice
+ ---> Removed intermediate container e7c9a4ee6e57
+ ---> 30cd1618ec74
+Step 32/50 : FROM source AS build-worker
+ ---> 0ccb9c1cfe17
+Step 33/50 : WORKDIR /app/worker
+ ---> Running in 483f42b0e71d
+ ---> Removed intermediate container 483f42b0e71d
+ ---> d739df5a6d19
+Step 34/50 : RUN npx tsc
+ ---> Running in 37925ab29152
+npm notice
+npm notice New major version of npm available! 10.8.2 -> 11.12.1
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.12.1
+npm notice To update run: npm install -g npm@11.12.1
+npm notice

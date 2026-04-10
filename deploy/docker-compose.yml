@@ -51,7 +51,7 @@ services:
     depends_on:
       - api
     ports:
-      - "${PUBLIC_PORT:-80}:80"
+      - "${PUBLIC_PORT:-8880}:80"
     networks:
       - playout
 
