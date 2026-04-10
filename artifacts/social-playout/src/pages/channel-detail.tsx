@@ -62,6 +62,7 @@ interface Channel {
   activePlaylistId?: number;
   activeLiveInputId?: number;
   activeJobId?: number;
+  loopPlaylist?: boolean;
   bitrate?: number;
   fps?: number;
   uptimeSeconds?: number;
@@ -361,6 +362,18 @@ export default function ChannelDetailPage() {
     onError: (e: Error) => toast({ variant: "destructive", title: "Error", description: e.message }),
   });
 
+  const toggleLoopMutation = useMutation({
+    mutationFn: (loop: boolean) =>
+      apiFetch(`/channels/${channelId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ loopPlaylist: loop }),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["channel", channelId] });
+    },
+    onError: (e: Error) => toast({ variant: "destructive", title: "Error", description: e.message }),
+  });
+
   const toggleDestMutation = useMutation({
     mutationFn: (id: number) => apiFetch(`/destinations/${id}/toggle`, { method: "POST" }),
     onSuccess: () => { refetchDests(); },
@@ -545,7 +558,15 @@ export default function ChannelDetailPage() {
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
                   <p className="text-xs text-muted-foreground">Source</p>
-                  <p className="font-mono text-xs break-all">{channel.activeJob.sourceRef}</p>
+                  <p className="font-mono text-xs break-all">
+                    {channel.sourceMode === "playlist" && channel.playlist
+                      ? `Playlist: ${channel.playlist.name}`
+                      : channel.sourceMode === "live_input" && channel.liveInput
+                      ? `Live: ${channel.liveInput.name}`
+                      : channel.sourceMode === "fallback"
+                      ? "Fallback Slate"
+                      : channel.activeJob.sourceRef}
+                  </p>
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">Worker</p>
@@ -582,9 +603,17 @@ export default function ChannelDetailPage() {
               </div>
 
               {channel.sourceMode === "playlist" && channel.playlist && (
-                <div className="rounded-md bg-accent/30 p-3 space-y-1">
+                <div className="rounded-md bg-accent/30 p-3 space-y-2">
                   <div className="text-xs text-muted-foreground">Active Playlist</div>
                   <div className="font-medium text-sm">{channel.playlist.name}</div>
+                  <div className="flex items-center justify-between pt-1 border-t border-border/30">
+                    <Label className="text-xs text-muted-foreground">Loop Playlist</Label>
+                    <Switch
+                      checked={channel.loopPlaylist !== false}
+                      onCheckedChange={(checked) => toggleLoopMutation.mutate(checked)}
+                      disabled={toggleLoopMutation.isPending}
+                    />
+                  </div>
                 </div>
               )}
 

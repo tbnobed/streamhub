@@ -10,6 +10,7 @@ export interface PlayoutJob {
   destinations: Array<{ streamUrl: string; streamKey: string; platform: string }>;
   ffmpegCommand: string | null;
   pid: number | null;
+  loopPlaylist?: boolean;
 }
 
 export class ApiClient {

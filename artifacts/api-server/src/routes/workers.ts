@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { workerNodesTable, playoutJobsTable, workerEventsTable } from "@workspace/db";
+import { workerNodesTable, playoutJobsTable, workerEventsTable, channelsTable } from "@workspace/db";
 import { eq, and, isNull } from "drizzle-orm";
 import {
   WorkerHeartbeatBody,
@@ -80,8 +80,12 @@ router.get("/workers/jobs", async (req, res): Promise<void> => {
   }
 
   const jobs = await db
-    .select()
+    .select({
+      job: playoutJobsTable,
+      loopPlaylist: channelsTable.loopPlaylist,
+    })
     .from(playoutJobsTable)
+    .leftJoin(channelsTable, eq(playoutJobsTable.channelId, channelsTable.id))
     .where(
       and(
         eq(playoutJobsTable.workerId, params.data.workerId),
@@ -89,7 +93,10 @@ router.get("/workers/jobs", async (req, res): Promise<void> => {
       )
     );
 
-  res.json(jobs);
+  res.json(jobs.map((r) => ({
+    ...r.job,
+    loopPlaylist: r.loopPlaylist ?? true,
+  })));
 });
 
 router.post("/workers/jobs/:id/status", async (req, res): Promise<void> => {

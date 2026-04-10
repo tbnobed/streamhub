@@ -370,9 +370,13 @@ export class PlayoutJobRunner {
       args.push(
         "-f", "concat",
         "-safe", "0",
-        "-stream_loop", "-1",
-        "-i", playlistPath,
       );
+
+      if (this.job.loopPlaylist !== false) {
+        args.push("-stream_loop", "-1");
+      }
+
+      args.push("-i", playlistPath);
 
       return args;
     }
@@ -408,7 +412,7 @@ export class PlayoutJobRunner {
       return buildPlaylistCommand({
         playlistFile: playlistPath,
         destinations,
-        loop: true,
+        loop: this.job.loopPlaylist !== false,
         protocolWhitelist: hasHttpUrls,
       });
     }
