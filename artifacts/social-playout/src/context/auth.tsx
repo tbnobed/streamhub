@@ -7,6 +7,7 @@ interface User {
   username: string;
   email: string;
   role: string;
+  timezone: string;
   displayName?: string | null;
 }
 
@@ -16,6 +17,7 @@ interface AuthContextValue {
   isLoading: boolean;
   login: (username: string, password: string) => Promise<void>;
   logout: () => void;
+  updateTimezone: (timezone: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -56,6 +58,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem("auth_user", JSON.stringify(data.user));
   };
 
+  const updateTimezone = async (timezone: string) => {
+    const currentToken = getToken();
+    if (!currentToken) return;
+    const res = await fetch(`${apiBase()}/auth/me`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${currentToken}`,
+      },
+      body: JSON.stringify({ timezone }),
+    });
+    if (res.ok) {
+      const updated = await res.json();
+      setUser(updated);
+      localStorage.setItem("auth_user", JSON.stringify(updated));
+    }
+  };
+
   const logout = () => {
     clearToken();
     setToken(null);
@@ -64,7 +84,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, isLoading, login, logout }}>
+    <AuthContext.Provider value={{ user, token, isLoading, login, logout, updateTimezone }}>
       {children}
     </AuthContext.Provider>
   );

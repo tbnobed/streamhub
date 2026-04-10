@@ -14,9 +14,11 @@ import {
   Menu,
   X,
   Users,
+  Globe,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, adminOnly: false },
@@ -34,8 +36,18 @@ interface AppShellProps {
   children: React.ReactNode;
 }
 
+const SIDEBAR_TIMEZONES = [
+  "UTC", "America/New_York", "America/Chicago", "America/Denver",
+  "America/Los_Angeles", "America/Anchorage", "Pacific/Honolulu",
+  "America/Toronto", "America/Vancouver", "America/Sao_Paulo",
+  "America/Mexico_City", "Europe/London", "Europe/Paris", "Europe/Berlin",
+  "Europe/Amsterdam", "Europe/Moscow", "Asia/Dubai", "Asia/Kolkata",
+  "Asia/Shanghai", "Asia/Tokyo", "Asia/Seoul", "Asia/Singapore",
+  "Australia/Sydney", "Australia/Melbourne", "Pacific/Auckland",
+];
+
 export function AppShell({ children }: AppShellProps) {
-  const { user, logout } = useAuth();
+  const { user, logout, updateTimezone } = useAuth();
   const [location] = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -96,7 +108,7 @@ export function AppShell({ children }: AppShellProps) {
         </nav>
 
         {/* User */}
-        <div className="p-4 border-t border-border">
+        <div className="p-4 border-t border-border space-y-3">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-xs font-bold text-primary">
               {(user?.displayName ?? user?.username ?? "?").charAt(0).toUpperCase()}
@@ -108,6 +120,22 @@ export function AppShell({ children }: AppShellProps) {
             <Button variant="ghost" size="icon" onClick={logout} title="Sign out">
               <LogOut className="w-4 h-4" />
             </Button>
+          </div>
+          <div className="flex items-center gap-2">
+            <Globe className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+            <Select
+              value={user?.timezone || "UTC"}
+              onValueChange={(v) => updateTimezone(v)}
+            >
+              <SelectTrigger className="h-7 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {SIDEBAR_TIMEZONES.map((tz) => (
+                  <SelectItem key={tz} value={tz} className="text-xs">{tz.replace(/_/g, " ")}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
       </aside>

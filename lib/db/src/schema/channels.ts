@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, integer, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, boolean, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -14,6 +14,11 @@ export const channelsTable = pgTable("channels", {
   fallbackAssetId: integer("fallback_asset_id"),
   loopPlaylist: boolean("loop_playlist").notNull().default(true),
   userId: integer("user_id"),
+  scheduleEnabled: boolean("schedule_enabled").notNull().default(false),
+  scheduleTimezone: text("schedule_timezone").notNull().default("UTC"),
+  scheduleStartTime: text("schedule_start_time"),
+  scheduleStopTime: text("schedule_stop_time"),
+  scheduleDays: jsonb("schedule_days").$type<number[]>().default([]),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

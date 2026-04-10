@@ -44,9 +44,45 @@ router.post("/auth/login", async (req, res): Promise<void> => {
       email: user.email,
       role: user.role,
       isActive: user.isActive,
+      timezone: user.timezone,
       createdAt: user.createdAt,
     },
     token,
+  });
+});
+
+router.patch("/auth/me", async (req, res): Promise<void> => {
+  const auth = req.headers.authorization;
+  if (!auth?.startsWith("Bearer ")) {
+    res.status(401).json({ error: "Not authenticated" });
+    return;
+  }
+  const token = auth.slice(7);
+  const userId = sessions.get(token);
+  if (!userId) {
+    res.status(401).json({ error: "Not authenticated" });
+    return;
+  }
+
+  const { timezone } = req.body;
+  if (timezone && typeof timezone === "string") {
+    await db.update(usersTable).set({ timezone }).where(eq(usersTable.id, userId));
+  }
+
+  const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId));
+  if (!user) {
+    res.status(404).json({ error: "User not found" });
+    return;
+  }
+
+  res.json({
+    id: user.id,
+    username: user.username,
+    email: user.email,
+    role: user.role,
+    isActive: user.isActive,
+    timezone: user.timezone,
+    createdAt: user.createdAt,
   });
 });
 
@@ -84,6 +120,7 @@ router.get("/auth/me", async (req, res): Promise<void> => {
     email: user.email,
     role: user.role,
     isActive: user.isActive,
+    timezone: user.timezone,
     createdAt: user.createdAt,
   });
 });

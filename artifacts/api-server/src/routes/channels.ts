@@ -153,6 +153,11 @@ router.patch("/channels/:id", async (req, res): Promise<void> => {
   if (parsed.data.activeLiveInputId !== undefined) updates.activeLiveInputId = parsed.data.activeLiveInputId;
   if (parsed.data.fallbackAssetId !== undefined) updates.fallbackAssetId = parsed.data.fallbackAssetId;
   if (parsed.data.loopPlaylist != null) updates.loopPlaylist = parsed.data.loopPlaylist;
+  if (parsed.data.scheduleEnabled != null) updates.scheduleEnabled = parsed.data.scheduleEnabled;
+  if (parsed.data.scheduleTimezone != null) updates.scheduleTimezone = parsed.data.scheduleTimezone;
+  if (parsed.data.scheduleStartTime !== undefined) updates.scheduleStartTime = parsed.data.scheduleStartTime;
+  if (parsed.data.scheduleStopTime !== undefined) updates.scheduleStopTime = parsed.data.scheduleStopTime;
+  if (parsed.data.scheduleDays !== undefined) updates.scheduleDays = parsed.data.scheduleDays;
 
   const [channel] = await db
     .update(channelsTable)

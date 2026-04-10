@@ -18,6 +18,7 @@ Port 80 (proxy)
 
 ## Key Features
 - Channel management (start/stop/switch-source) with playout job creation
+- **Channel scheduling**: Auto-start/stop streams at configured times with timezone support and day-of-week selection; scheduler runs every 30s on the API server
 - Asset library (register video/image/audio files)
 - Playlist builder with drag-and-drop ordering
 - Live RTMP/SRT ingest endpoints with stream key generation
@@ -27,6 +28,8 @@ Port 80 (proxy)
 - SRS ingest server health monitoring (version, uptime, active streams, bitrate, clients)
 - Per-input SRS stream status (live/inactive, bitrate, video codec/resolution, audio codec/sample rate)
 - Worker node management (heartbeat, job polling)
+- **Role-based access control**: Workers, Users, and Audit Logs pages are admin-only (both API and frontend protected)
+- User timezone preference (selectable from sidebar, saved per user)
 - Audit logs
 
 ## Database

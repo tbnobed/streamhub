@@ -10,10 +10,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Play, Square, ChevronLeft, RefreshCw, Activity, Tv2, Radio, Copy, Check, MonitorPlay, Plus, Trash2, Send, Zap } from "lucide-react";
-import { useState, useRef, useEffect } from "react";
+import { Play, Square, ChevronLeft, RefreshCw, Activity, Tv2, Radio, Copy, Check, MonitorPlay, Plus, Trash2, Send, Zap, Clock, Calendar } from "lucide-react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { apiBase } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/context/auth";
 
 interface LiveInput {
   id: number;
@@ -67,6 +68,11 @@ interface Channel {
   fps?: number;
   uptimeSeconds?: number;
   workerNodeId?: string;
+  scheduleEnabled?: boolean;
+  scheduleTimezone?: string;
+  scheduleStartTime?: string | null;
+  scheduleStopTime?: string | null;
+  scheduleDays?: number[];
   playlist?: { id: number; name: string };
   liveInput?: { id: number; name: string; protocol: string; streamKey: string; ingestUrl: string; status: string };
   destinations?: Array<{ id: number; name: string; platform: string; streamUrl: string }>;
@@ -268,11 +274,42 @@ function CompactPreview({ streamKey }: { streamKey: string }) {
   );
 }
 
+const COMMON_TIMEZONES = [
+  "UTC",
+  "America/New_York",
+  "America/Chicago",
+  "America/Denver",
+  "America/Los_Angeles",
+  "America/Anchorage",
+  "Pacific/Honolulu",
+  "America/Toronto",
+  "America/Vancouver",
+  "America/Sao_Paulo",
+  "America/Mexico_City",
+  "Europe/London",
+  "Europe/Paris",
+  "Europe/Berlin",
+  "Europe/Amsterdam",
+  "Europe/Moscow",
+  "Asia/Dubai",
+  "Asia/Kolkata",
+  "Asia/Shanghai",
+  "Asia/Tokyo",
+  "Asia/Seoul",
+  "Asia/Singapore",
+  "Australia/Sydney",
+  "Australia/Melbourne",
+  "Pacific/Auckland",
+];
+
+const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
 export default function ChannelDetailPage() {
   const [, params] = useRoute("/channels/:id");
   const channelId = params?.id;
   const qc = useQueryClient();
   const { toast } = useToast();
+  const { user } = useAuth();
   const [selectedSourceMode, setSelectedSourceMode] = useState("");
   const [switchPlaylist, setSwitchPlaylist] = useState("");
   const [switchLiveInput, setSwitchLiveInput] = useState("");
@@ -392,6 +429,25 @@ export default function ChannelDetailPage() {
   const toggleDestMutation = useMutation({
     mutationFn: (id: number) => apiFetch(`/destinations/${id}/toggle`, { method: "POST" }),
     onSuccess: () => { refetchDests(); },
+    onError: (e: Error) => toast({ variant: "destructive", title: "Error", description: e.message }),
+  });
+
+  const scheduleMutation = useMutation({
+    mutationFn: (body: {
+      scheduleEnabled?: boolean;
+      scheduleTimezone?: string;
+      scheduleStartTime?: string | null;
+      scheduleStopTime?: string | null;
+      scheduleDays?: number[];
+    }) =>
+      apiFetch(`/channels/${channelId}`, {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["channel", channelId] });
+      toast({ title: "Schedule updated" });
+    },
     onError: (e: Error) => toast({ variant: "destructive", title: "Error", description: e.message }),
   });
 
@@ -791,6 +847,125 @@ export default function ChannelDetailPage() {
             </CardContent>
           </Card>
         </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Clock className="w-4 h-4" />
+              Stream Schedule
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <Label className="text-sm font-medium">Enable Scheduling</Label>
+                <p className="text-xs text-muted-foreground mt-0.5">Auto-start and stop this channel at set times</p>
+              </div>
+              <Switch
+                checked={channel.scheduleEnabled ?? false}
+                onCheckedChange={(checked) => scheduleMutation.mutate({ scheduleEnabled: checked })}
+              />
+            </div>
+
+            {channel.scheduleEnabled && (
+              <div className="space-y-4 pt-2 border-t border-border/50">
+                <div className="space-y-2">
+                  <Label className="text-xs font-medium">Timezone</Label>
+                  <Select
+                    value={channel.scheduleTimezone || user?.timezone || "UTC"}
+                    onValueChange={(v) => scheduleMutation.mutate({ scheduleTimezone: v })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {COMMON_TIMEZONES.map((tz) => {
+                        let label = tz;
+                        try {
+                          const now = new Date();
+                          const short = new Intl.DateTimeFormat("en-US", { timeZone: tz, timeZoneName: "short" })
+                            .formatToParts(now)
+                            .find((p) => p.type === "timeZoneName")?.value;
+                          if (short) label = `${tz.replace(/_/g, " ")} (${short})`;
+                        } catch {}
+                        return <SelectItem key={tz} value={tz}>{label}</SelectItem>;
+                      })}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label className="text-xs font-medium">Start Time</Label>
+                    <Input
+                      type="time"
+                      value={channel.scheduleStartTime ?? ""}
+                      onChange={(e) => scheduleMutation.mutate({ scheduleStartTime: e.target.value || null })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs font-medium">Stop Time</Label>
+                    <Input
+                      type="time"
+                      value={channel.scheduleStopTime ?? ""}
+                      onChange={(e) => scheduleMutation.mutate({ scheduleStopTime: e.target.value || null })}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-xs font-medium flex items-center gap-1.5">
+                    <Calendar className="w-3.5 h-3.5" />
+                    Active Days
+                  </Label>
+                  <p className="text-xs text-muted-foreground">Select which days the schedule runs. Leave all unchecked for every day.</p>
+                  <div className="flex gap-1.5">
+                    {DAY_NAMES.map((dayName, idx) => {
+                      const days = channel.scheduleDays ?? [];
+                      const isActive = days.includes(idx);
+                      return (
+                        <button
+                          key={idx}
+                          className={`px-2.5 py-1.5 rounded text-xs font-medium transition-colors ${
+                            isActive
+                              ? "bg-primary text-primary-foreground"
+                              : "bg-accent/50 text-muted-foreground hover:bg-accent"
+                          }`}
+                          onClick={() => {
+                            const newDays = isActive
+                              ? days.filter((d: number) => d !== idx)
+                              : [...days, idx].sort();
+                            scheduleMutation.mutate({ scheduleDays: newDays });
+                          }}
+                        >
+                          {dayName}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {channel.scheduleStartTime && channel.scheduleStopTime && (
+                  <div className="rounded-md bg-accent/30 p-3 space-y-1">
+                    <p className="text-xs font-medium flex items-center gap-1.5">
+                      <Clock className="w-3 h-3" />
+                      Schedule Summary
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Stream will auto-start at <span className="font-mono font-medium text-foreground">{channel.scheduleStartTime}</span> and
+                      stop at <span className="font-mono font-medium text-foreground">{channel.scheduleStopTime}</span>
+                      {" "}({channel.scheduleTimezone || "UTC"})
+                      {(channel.scheduleDays ?? []).length > 0 && (
+                        <span> on {(channel.scheduleDays ?? []).map((d: number) => DAY_NAMES[d]).join(", ")}</span>
+                      )}
+                      {(channel.scheduleDays ?? []).length === 0 && <span> every day</span>}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
       <Dialog open={addDestOpen} onOpenChange={setAddDestOpen}>

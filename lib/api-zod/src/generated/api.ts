@@ -366,6 +366,11 @@ export const UpdateChannelBody = zod.object({
   activeLiveInputId: zod.number().nullish(),
   fallbackAssetId: zod.number().nullish(),
   loopPlaylist: zod.boolean().nullish(),
+  scheduleEnabled: zod.boolean().nullish(),
+  scheduleTimezone: zod.string().nullish(),
+  scheduleStartTime: zod.string().nullish(),
+  scheduleStopTime: zod.string().nullish(),
+  scheduleDays: zod.array(zod.number().min(0).max(6)).nullish(),
 });
 
 export const UpdateChannelResponse = zod.object({
