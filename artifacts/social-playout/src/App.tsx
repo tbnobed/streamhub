@@ -19,6 +19,7 @@ import DestinationsPage from "@/pages/destinations";
 import YouTubePage from "@/pages/youtube";
 import WorkersPage from "@/pages/workers";
 import LogsPage from "@/pages/logs";
+import UsersPage from "@/pages/users";
 import NotFound from "@/pages/not-found";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -67,6 +68,9 @@ function Router() {
       </Route>
       <Route path="/logs">
         {() => <ProtectedRoute><LogsPage /></ProtectedRoute>}
+      </Route>
+      <Route path="/users">
+        {() => <ProtectedRoute><UsersPage /></ProtectedRoute>}
       </Route>
       <Route component={NotFound} />
     </Switch>

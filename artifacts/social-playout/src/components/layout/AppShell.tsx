@@ -13,6 +13,7 @@ import {
   LogOut,
   Menu,
   X,
+  Users,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -25,6 +26,7 @@ const NAV_ITEMS = [
   { href: "/live-inputs", label: "Live Inputs", icon: Radio },
   { href: "/destinations", label: "Destinations", icon: Share2 },
   { href: "/workers", label: "Workers", icon: ServerCog },
+  { href: "/users", label: "Users", icon: Users },
   { href: "/logs", label: "Audit Logs", icon: ScrollText },
 ];
 

@@ -97,6 +97,7 @@ router.patch("/users/:id", async (req, res): Promise<void> => {
   if (parsed.data.email != null) updates.email = parsed.data.email;
   if (parsed.data.role != null) updates.role = parsed.data.role;
   if (parsed.data.isActive != null) updates.isActive = parsed.data.isActive;
+  if ((req.body as Record<string, unknown>).password) updates.passwordHash = hashPassword(req.body.password);
 
   if (Object.keys(updates).length === 0) {
     res.status(400).json({ error: "No fields to update" });
