@@ -314,6 +314,10 @@ export class PlayoutJobRunner {
         const trimmed = segment.trim();
         if (!trimmed) continue;
 
+        if (trimmed.includes("Error") || trimmed.includes("error") || trimmed.includes("RTMP") || trimmed.includes("corrupt") || trimmed.includes("Invalid")) {
+          logger.warn({ jobId: this.job.id, ffmpeg: trimmed }, "FFmpeg stderr");
+        }
+
         const bitrateMatch = trimmed.match(/bitrate=\s*([\d.]+)\s*kbits/);
         if (bitrateMatch) {
           lastBitrate = Math.round(parseFloat(bitrateMatch[1]!) * 1000);

@@ -40,35 +40,51 @@ export interface FallbackSlateOptions {
   destinations: DestinationConfig[];
 }
 
-function buildOutputArgs(destinations: DestinationConfig[]): string[] {
+function buildOutputArgs(destinations: DestinationConfig[], mode: "copy" | "reencode" = "copy"): string[] {
   return destinations.flatMap((dest) => {
+    const args = ["-map", "0:v:0?", "-map", "0:a:0?"];
     if (dest.platform === "srt") {
       const srtUrl = dest.streamUrl.includes("?")
         ? dest.streamUrl
         : `${dest.streamUrl}`;
-      return [
-        "-c:v", "copy",
-        "-c:a", "copy",
-        "-f", "mpegts",
-        srtUrl,
-      ];
+      if (mode === "reencode") {
+        args.push(
+          "-c:v", "libx264", "-preset", "veryfast",
+          "-b:v", "4000k", "-maxrate", "4500k", "-bufsize", "9000k",
+          "-vf", "scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2",
+          "-g", "60",
+          "-c:a", "aac", "-b:a", "128k", "-ar", "44100",
+          "-f", "mpegts", srtUrl,
+        );
+      } else {
+        args.push("-c:v", "copy", "-c:a", "copy", "-f", "mpegts", srtUrl);
+      }
+      return args;
     }
     const rtmpUrl = `${dest.streamUrl}/${dest.streamKey}`.replace(/\/+$/, "");
-    return [
-      "-c:v", "copy",
-      "-c:a", "copy",
-      "-f", "flv",
-      rtmpUrl,
-    ];
+    if (mode === "reencode") {
+      args.push(
+        "-c:v", "libx264", "-preset", "veryfast",
+        "-b:v", "4000k", "-maxrate", "4500k", "-bufsize", "9000k",
+        "-vf", "scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2",
+        "-g", "60",
+        "-c:a", "aac", "-b:a", "128k", "-ar", "44100",
+        "-f", "flv", rtmpUrl,
+      );
+    } else {
+      args.push("-c:v", "copy", "-c:a", "copy", "-f", "flv", rtmpUrl);
+    }
+    return args;
   });
 }
 
 /**
  * Loop a single file indefinitely to one or more RTMP destinations.
+ * Re-encodes to 1920x1080 @ 4Mbps for destination compatibility.
  *
  * Example:
  *   ffmpeg -re -stream_loop -1 -i /media/slate.mp4 \
- *     -c:v copy -c:a copy -f flv rtmp://a.rtmp.youtube.com/live2/xxxx
+ *     -map 0:v:0? -map 0:a:0? -c:v libx264 ... -f flv rtmp://dest
  */
 export function buildFileLoopCommand(opts: FilePlayoutOptions): string[] {
   const loop = opts.loop !== false;
@@ -86,7 +102,7 @@ export function buildFileLoopCommand(opts: FilePlayoutOptions): string[] {
     cmd.push("-af", `volume=${opts.audioVolume}`);
   }
 
-  cmd.push(...buildOutputArgs(opts.destinations));
+  cmd.push(...buildOutputArgs(opts.destinations, "reencode"));
 
   return cmd;
 }
