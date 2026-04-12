@@ -142,8 +142,8 @@ export default function ChannelsPage() {
               <CardContent className="p-5">
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex items-center gap-4 min-w-0">
-                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${ch.status === "on_air" || ch.status === "live" ? "bg-red-500/20" : "bg-primary/10"}`}>
-                      <Tv2 className={`w-5 h-5 ${ch.status === "on_air" || ch.status === "live" ? "text-red-500" : "text-primary"}`} />
+                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${ch.status === "on_air" || ch.status === "live" ? "bg-red-500/20" : ch.status === "error" ? "bg-orange-500/20" : "bg-primary/10"}`}>
+                      <Tv2 className={`w-5 h-5 ${ch.status === "on_air" || ch.status === "live" ? "text-red-500" : ch.status === "error" ? "text-orange-500" : "text-primary"}`} />
                     </div>
                     <div className="min-w-0">
                       <Link href={`/channels/${ch.id}`}>

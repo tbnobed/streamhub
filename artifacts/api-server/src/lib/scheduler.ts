@@ -10,12 +10,14 @@ import {
   streamSessionsTable,
   auditLogsTable,
 } from "@workspace/db";
-import { eq, and, asc, desc } from "drizzle-orm";
+import { eq, and, asc, desc, inArray, gte } from "drizzle-orm";
 import { logger } from "./logger";
 import { LocalStorageService } from "./objectStorage";
 import { reapStaleWorkerJobs } from "./jobCleanup";
 
 const RESTART_COOLDOWN_MS = 5 * 60 * 1000;
+const RECOVERY_COOLDOWN_MS = 30_000;
+const MAX_CONSECUTIVE_FAILURES = 5;
 
 function getTimeInTimezone(timezone: string): { hours: number; minutes: number; dayOfWeek: number } {
   try {
@@ -45,9 +47,32 @@ function timeToMinutes(timeStr: string): number {
   return h * 60 + m;
 }
 
-async function startChannel(channelId: number): Promise<void> {
+async function getRecentFailureCount(channelId: number): Promise<number> {
+  const windowStart = new Date(Date.now() - 30 * 60 * 1000);
+  const recentJobs = await db.select({ status: playoutJobsTable.status, stoppedAt: playoutJobsTable.stoppedAt })
+    .from(playoutJobsTable)
+    .where(and(
+      eq(playoutJobsTable.channelId, channelId),
+      inArray(playoutJobsTable.status, ["failed", "stopped", "completed"]),
+      gte(playoutJobsTable.stoppedAt, windowStart),
+    ))
+    .orderBy(desc(playoutJobsTable.stoppedAt))
+    .limit(MAX_CONSECUTIVE_FAILURES + 1);
+
+  let consecutiveFails = 0;
+  for (const j of recentJobs) {
+    if (j.status === "failed") consecutiveFails++;
+    else break;
+  }
+  return consecutiveFails;
+}
+
+async function startChannel(channelId: number, opts?: { isRecovery?: boolean }): Promise<void> {
   const [channel] = await db.select().from(channelsTable).where(eq(channelsTable.id, channelId));
-  if (!channel || channel.status === "on_air") return;
+  if (!channel || channel.status === "on_air" || channel.status === "starting") return;
+
+  const isRecovery = opts?.isRecovery ?? false;
+  const cooldownMs = isRecovery ? RECOVERY_COOLDOWN_MS : RESTART_COOLDOWN_MS;
 
   const [lastFailedJob] = await db.select({ stoppedAt: playoutJobsTable.stoppedAt })
     .from(playoutJobsTable)
@@ -57,9 +82,18 @@ async function startChannel(channelId: number): Promise<void> {
 
   if (lastFailedJob?.stoppedAt) {
     const elapsed = Date.now() - new Date(lastFailedJob.stoppedAt).getTime();
-    if (elapsed < RESTART_COOLDOWN_MS) {
-      logger.info({ channelId, cooldownRemaining: Math.round((RESTART_COOLDOWN_MS - elapsed) / 1000) },
-        "Scheduler: skipping start, recent job failure cooldown active");
+    if (elapsed < cooldownMs) {
+      logger.info({ channelId, cooldownRemaining: Math.round((cooldownMs - elapsed) / 1000), isRecovery },
+        "Scheduler: skipping start, cooldown active");
+      return;
+    }
+  }
+
+  if (isRecovery) {
+    const consecutiveFails = await getRecentFailureCount(channelId);
+    if (consecutiveFails >= MAX_CONSECUTIVE_FAILURES) {
+      logger.warn({ channelId, consecutiveFails },
+        "Scheduler: auto-recovery disabled, too many consecutive failures");
       return;
     }
   }
@@ -145,10 +179,28 @@ async function startChannel(channelId: number): Promise<void> {
   const workers = await db.select().from(workerNodesTable).where(eq(workerNodesTable.status, "online"));
   const assignedWorker = workers.length > 0 ? workers[0].workerId : null;
 
+  if (!assignedWorker) {
+    logger.warn({ channelId, isRecovery }, "Scheduler: no online workers, skipping start");
+    return;
+  }
+
+  const [lockResult] = await db.update(channelsTable)
+    .set({ status: "starting" })
+    .where(and(
+      eq(channelsTable.id, channel.id),
+      inArray(channelsTable.status, ["idle", "error"]),
+    ))
+    .returning({ id: channelsTable.id });
+
+  if (!lockResult) {
+    logger.info({ channelId }, "Scheduler: channel state changed, skipping start");
+    return;
+  }
+
   const [job] = await db.insert(playoutJobsTable).values({
     channelId: channel.id,
     workerId: assignedWorker,
-    status: assignedWorker ? "running" : "pending",
+    status: "running",
     sourceMode: channel.sourceMode,
     sourceRef,
     destinations: destConfigs,
@@ -168,13 +220,14 @@ async function startChannel(channelId: number): Promise<void> {
   });
 
   await db.insert(auditLogsTable).values({
-    action: "channel_scheduled_start",
+    action: isRecovery ? "channel_auto_recovery" : "channel_scheduled_start",
     resourceType: "channel",
     resourceId: channel.id,
-    details: { channelName: channel.name, jobId: job.id, trigger: "scheduler" },
+    details: { channelName: channel.name, jobId: job.id, trigger: isRecovery ? "auto_recovery" : "scheduler" },
   });
 
-  logger.info({ channelId, channelName: channel.name, jobId: job.id }, "Scheduler: channel started");
+  logger.info({ channelId, channelName: channel.name, jobId: job.id, isRecovery },
+    isRecovery ? "Auto-recovery: channel restarted" : "Scheduler: channel started");
 }
 
 async function stopChannel(channelId: number): Promise<void> {
@@ -245,14 +298,33 @@ async function checkSchedules(): Promise<void> {
         shouldBeOn = false;
       }
 
-      if (shouldBeOn && channel.status === "idle") {
-        await startChannel(channel.id);
-      } else if (!shouldBeOn && channel.status === "on_air") {
+      if (shouldBeOn && (channel.status === "idle" || channel.status === "error")) {
+        const isRecovery = channel.status === "error";
+        await startChannel(channel.id, { isRecovery });
+      } else if (!shouldBeOn && (channel.status === "on_air" || channel.status === "error")) {
         await stopChannel(channel.id);
       }
     }
   } catch (err) {
     logger.error({ err }, "Scheduler: error checking schedules");
+  }
+}
+
+async function recoverErrorChannels(): Promise<void> {
+  try {
+    const errorChannels = await db.select().from(channelsTable)
+      .where(and(
+        eq(channelsTable.status, "error"),
+        eq(channelsTable.scheduleEnabled, false),
+      ));
+
+    for (const channel of errorChannels) {
+      logger.info({ channelId: channel.id, channelName: channel.name },
+        "Auto-recovery: attempting restart for failed channel");
+      await startChannel(channel.id, { isRecovery: true });
+    }
+  } catch (err) {
+    logger.error({ err }, "Auto-recovery: error recovering channels");
   }
 }
 
@@ -263,9 +335,11 @@ export function startScheduler(): void {
   logger.info("Channel scheduler started (30s interval)");
   checkSchedules();
   reapStaleWorkerJobs();
+  recoverErrorChannels();
   intervalId = setInterval(() => {
     checkSchedules();
     reapStaleWorkerJobs();
+    recoverErrorChannels();
   }, 30_000);
 }
 

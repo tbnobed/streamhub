@@ -673,7 +673,10 @@ export default function ChannelDetailPage() {
                   <p className="text-xs text-muted-foreground">
                     {channel.activeJob?.errorMessage || "The stream encountered an error and was stopped."}
                   </p>
-                  <p className="text-xs text-muted-foreground mt-2">Click Start to restart the channel.</p>
+                  <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-yellow-500/10 text-yellow-400 text-xs">
+                    <RefreshCw className="w-3 h-3 animate-spin" style={{ animationDuration: "3s" }} />
+                    Auto-recovery in progress...
+                  </div>
                 </div>
               ) : isLive ? (() => {
                 const jobBitrate = channel.activeJob?.bitrate;

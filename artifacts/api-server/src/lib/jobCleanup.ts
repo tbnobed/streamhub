@@ -25,7 +25,7 @@ export async function cleanupStaleJobs(): Promise<void> {
 
     for (const chId of channelIds) {
       await db.update(channelsTable)
-        .set({ status: "idle", activeJobId: null })
+        .set({ status: "error", activeJobId: null })
         .where(eq(channelsTable.id, chId));
     }
 
