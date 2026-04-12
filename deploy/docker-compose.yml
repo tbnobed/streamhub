@@ -39,6 +39,7 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-info}
     volumes:
       - uploads:/data/uploads
+      - preview:/tmp/preview
     networks:
       - playout
 
@@ -70,12 +71,14 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-info}
     volumes:
       - uploads:/data/uploads:ro
+      - preview:/tmp/preview
     networks:
       - playout
 
 volumes:
   pgdata:
   uploads:
+  preview:
 
 networks:
   playout:
