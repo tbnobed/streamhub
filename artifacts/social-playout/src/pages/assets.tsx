@@ -16,16 +16,49 @@ import { useState, useRef } from "react";
 import { apiBase } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 
-interface Asset {
+interface RawAsset {
   id: number;
   name: string;
-  type: string;
+  filename?: string;
   duration?: number;
   filePath?: string;
   fileSize?: number;
   mimeType?: string;
   status: string;
   createdAt: string;
+}
+
+interface Asset extends RawAsset {
+  type: string;
+  previewUrl?: string;
+}
+
+function deriveAssetType(a: RawAsset): string {
+  if (a.mimeType === "rtmp" || a.mimeType === "m3u8") return "stream";
+  if (a.mimeType?.startsWith("video/")) return "video";
+  if (a.mimeType?.startsWith("audio/")) return "audio";
+  if (a.mimeType?.startsWith("image/")) return "image";
+  const fp = (a.filePath ?? a.filename ?? "").toLowerCase();
+  if (fp.endsWith(".mp4") || fp.endsWith(".mov") || fp.endsWith(".mkv") || fp.endsWith(".avi") || fp.endsWith(".webm") || fp.endsWith(".ts")) return "video";
+  if (fp.endsWith(".mp3") || fp.endsWith(".wav") || fp.endsWith(".flac") || fp.endsWith(".aac") || fp.endsWith(".ogg")) return "audio";
+  if (fp.endsWith(".jpg") || fp.endsWith(".jpeg") || fp.endsWith(".png") || fp.endsWith(".gif") || fp.endsWith(".webp") || fp.endsWith(".bmp") || fp.endsWith(".svg")) return "image";
+  if (fp.endsWith(".m3u8")) return "stream";
+  return "video";
+}
+
+function resolvePreviewUrl(a: RawAsset): string | undefined {
+  if (!a.filePath) return undefined;
+  if (a.filePath.startsWith("http://") || a.filePath.startsWith("https://") || a.filePath.startsWith("rtmp://") || a.filePath.startsWith("rtmps://")) {
+    return a.filePath;
+  }
+  if (a.filePath.startsWith("/api/")) {
+    return `${apiBase()}${a.filePath.replace(/^\/api/, "")}`;
+  }
+  return a.filePath;
+}
+
+function enrichAsset(raw: RawAsset): Asset {
+  return { ...raw, type: deriveAssetType(raw), previewUrl: resolvePreviewUrl(raw) };
 }
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
@@ -94,7 +127,10 @@ export default function AssetsPage() {
 
   const { data: assets = [], isLoading } = useQuery<Asset[]>({
     queryKey: ["assets"],
-    queryFn: () => apiFetch("/assets"),
+    queryFn: async () => {
+      const raw = await apiFetch<RawAsset[]>("/assets");
+      return raw.map(enrichAsset);
+    },
   });
 
   const streamMutation = useMutation({
@@ -321,41 +357,41 @@ export default function AssetsPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="py-2">
-            {previewAsset?.type === "video" && previewAsset.filePath && (
+            {previewAsset?.type === "video" && previewAsset.previewUrl && (
               <video
                 key={previewAsset.id}
-                src={previewAsset.filePath}
+                src={previewAsset.previewUrl}
                 controls
                 autoPlay
                 className="w-full rounded-lg bg-black max-h-[500px]"
               />
             )}
-            {previewAsset?.type === "audio" && previewAsset.filePath && (
+            {previewAsset?.type === "audio" && previewAsset.previewUrl && (
               <div className="flex flex-col items-center gap-4 py-8">
                 <Music className="w-16 h-16 text-green-400/40" />
                 <audio
                   key={previewAsset.id}
-                  src={previewAsset.filePath}
+                  src={previewAsset.previewUrl}
                   controls
                   autoPlay
                   className="w-full"
                 />
               </div>
             )}
-            {previewAsset?.type === "image" && previewAsset.filePath && (
+            {previewAsset?.type === "image" && previewAsset.previewUrl && (
               <img
                 key={previewAsset.id}
-                src={previewAsset.filePath}
+                src={previewAsset.previewUrl}
                 alt={previewAsset.name}
                 className="w-full rounded-lg max-h-[500px] object-contain bg-black"
               />
             )}
-            {previewAsset?.type === "stream" && previewAsset.filePath && (
+            {previewAsset?.type === "stream" && previewAsset.previewUrl && (
               <div className="space-y-3">
                 {previewAsset.mimeType === "m3u8" ? (
                   <video
                     key={previewAsset.id}
-                    src={previewAsset.filePath}
+                    src={previewAsset.previewUrl}
                     controls
                     autoPlay
                     className="w-full rounded-lg bg-black max-h-[500px]"
