@@ -11,7 +11,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Film, Trash2, Upload, Image, Music, FileVideo, Radio } from "lucide-react";
+import { Film, Trash2, Upload, Image, Music, FileVideo, Radio, Eye } from "lucide-react";
 import { useState, useRef } from "react";
 import { apiBase } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
@@ -77,6 +77,7 @@ function detectMediaType(mime: string): string {
 export default function AssetsPage() {
   const qc = useQueryClient();
   const { toast } = useToast();
+  const [previewAsset, setPreviewAsset] = useState<Asset | null>(null);
   const [streamOpen, setStreamOpen] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -246,6 +247,11 @@ export default function AssetsPage() {
                     <Badge variant={asset.status === "ready" ? "default" : "secondary"} className="capitalize">
                       {asset.status}
                     </Badge>
+                    {asset.filePath && (
+                      <Button size="icon" variant="ghost" onClick={() => setPreviewAsset(asset)} title="Preview">
+                        <Eye className="w-4 h-4 text-muted-foreground" />
+                      </Button>
+                    )}
                     <Button size="icon" variant="ghost" onClick={() => { if (confirm("Delete asset?")) deleteMutation.mutate(asset.id); }}>
                       <Trash2 className="w-4 h-4 text-muted-foreground" />
                     </Button>
@@ -298,6 +304,79 @@ export default function AssetsPage() {
               <Button variant="outline" onClick={() => setUploadOpen(false)}>Cancel</Button>
             </DialogFooter>
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!previewAsset} onOpenChange={(open) => { if (!open) setPreviewAsset(null); }}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {previewAsset && <AssetIcon type={previewAsset.type} />}
+              {previewAsset?.name}
+            </DialogTitle>
+            <DialogDescription>
+              {previewAsset?.type === "stream"
+                ? `${(previewAsset.mimeType ?? "").toUpperCase()} stream preview`
+                : `${previewAsset?.type ?? "media"} preview`}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-2">
+            {previewAsset?.type === "video" && previewAsset.filePath && (
+              <video
+                key={previewAsset.id}
+                src={previewAsset.filePath}
+                controls
+                autoPlay
+                className="w-full rounded-lg bg-black max-h-[500px]"
+              />
+            )}
+            {previewAsset?.type === "audio" && previewAsset.filePath && (
+              <div className="flex flex-col items-center gap-4 py-8">
+                <Music className="w-16 h-16 text-green-400/40" />
+                <audio
+                  key={previewAsset.id}
+                  src={previewAsset.filePath}
+                  controls
+                  autoPlay
+                  className="w-full"
+                />
+              </div>
+            )}
+            {previewAsset?.type === "image" && previewAsset.filePath && (
+              <img
+                key={previewAsset.id}
+                src={previewAsset.filePath}
+                alt={previewAsset.name}
+                className="w-full rounded-lg max-h-[500px] object-contain bg-black"
+              />
+            )}
+            {previewAsset?.type === "stream" && previewAsset.filePath && (
+              <div className="space-y-3">
+                {previewAsset.mimeType === "m3u8" ? (
+                  <video
+                    key={previewAsset.id}
+                    src={previewAsset.filePath}
+                    controls
+                    autoPlay
+                    className="w-full rounded-lg bg-black max-h-[500px]"
+                  />
+                ) : (
+                  <div className="flex flex-col items-center gap-3 py-8 text-muted-foreground">
+                    <Radio className="w-12 h-12 opacity-30" />
+                    <p className="text-sm">RTMP streams cannot be previewed in the browser.</p>
+                    <p className="text-xs">Use a player like VLC or OBS to preview this stream.</p>
+                  </div>
+                )}
+                <div className="bg-accent/30 rounded-md px-3 py-2">
+                  <p className="text-xs text-muted-foreground mb-1">Stream URL</p>
+                  <code className="text-xs font-mono break-all">{previewAsset.filePath}</code>
+                </div>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPreviewAsset(null)}>Close</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
