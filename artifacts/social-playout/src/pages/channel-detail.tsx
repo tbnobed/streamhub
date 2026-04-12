@@ -1220,7 +1220,7 @@ export default function ChannelDetailPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateDestOpen(false)}>Cancel</Button>
             <Button
-              disabled={!destForm.name || !destForm.streamUrl || !destForm.streamKey || createDestMutation.isPending}
+              disabled={!destForm.name || !destForm.streamUrl || createDestMutation.isPending}
               onClick={() => createDestMutation.mutate(destForm)}
             >
               {createDestMutation.isPending ? "Creating…" : "Create Destination"}
