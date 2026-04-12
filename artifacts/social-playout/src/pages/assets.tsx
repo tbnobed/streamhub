@@ -6,13 +6,12 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
-import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Film, Plus, Trash2, Upload, Image, Music, FileVideo } from "lucide-react";
+import { Film, Trash2, Upload, Image, Music, FileVideo, Radio } from "lucide-react";
 import { useState, useRef } from "react";
 import { apiBase } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
@@ -24,6 +23,7 @@ interface Asset {
   duration?: number;
   filePath?: string;
   fileSize?: number;
+  mimeType?: string;
   status: string;
   createdAt: string;
 }
@@ -49,6 +49,7 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
 function AssetIcon({ type }: { type: string }) {
   if (type === "image") return <Image className="w-5 h-5 text-blue-400" />;
   if (type === "audio") return <Music className="w-5 h-5 text-green-400" />;
+  if (type === "stream") return <Radio className="w-5 h-5 text-red-400" />;
   return <FileVideo className="w-5 h-5 text-purple-400" />;
 }
 
@@ -76,15 +77,13 @@ function detectMediaType(mime: string): string {
 export default function AssetsPage() {
   const qc = useQueryClient();
   const { toast } = useToast();
-  const [createOpen, setCreateOpen] = useState(false);
+  const [streamOpen, setStreamOpen] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [search, setSearch] = useState("");
-  const [form, setForm] = useState({
+  const [streamForm, setStreamForm] = useState({
     name: "",
-    type: "video",
-    filePath: "",
-    duration: "",
-    description: "",
+    url: "",
+    protocol: "rtmp" as "rtmp" | "m3u8",
   });
 
   const [uploading, setUploading] = useState(false);
@@ -97,13 +96,13 @@ export default function AssetsPage() {
     queryFn: () => apiFetch("/assets"),
   });
 
-  const createMutation = useMutation({
+  const streamMutation = useMutation({
     mutationFn: (body: Record<string, unknown>) => apiFetch<Asset>("/assets", { method: "POST", body: JSON.stringify(body) }),
     onSuccess: () => {
-      setCreateOpen(false);
-      setForm({ name: "", type: "video", filePath: "", duration: "", description: "" });
+      setStreamOpen(false);
+      setStreamForm({ name: "", url: "", protocol: "rtmp" });
       qc.invalidateQueries({ queryKey: ["assets"] });
-      setTimeout(() => toast({ title: "Asset registered" }), 100);
+      setTimeout(() => toast({ title: "Stream added" }), 100);
     },
     onError: (e: Error) => toast({ variant: "destructive", title: "Error", description: e.message }),
   });
@@ -197,8 +196,8 @@ export default function AssetsPage() {
             <Button onClick={() => setUploadOpen(true)} variant="default">
               <Upload className="w-4 h-4 mr-2" />Upload File
             </Button>
-            <Button onClick={() => setCreateOpen(true)} variant="outline">
-              <Plus className="w-4 h-4 mr-2" />Register Path
+            <Button onClick={() => setStreamOpen(true)} variant="outline">
+              <Radio className="w-4 h-4 mr-2" />Add Stream
             </Button>
           </div>
         </div>
@@ -235,9 +234,12 @@ export default function AssetsPage() {
                     <div className="font-medium truncate">{asset.name}</div>
                     <div className="text-xs text-muted-foreground flex gap-3 mt-0.5">
                       <span className="capitalize">{asset.type}</span>
-                      {asset.filePath && <span className="truncate max-w-xs">{asset.filePath}</span>}
-                      <span>{formatDuration(asset.duration)}</span>
-                      <span>{formatBytes(asset.fileSize)}</span>
+                      {asset.type === "stream" && asset.mimeType && (
+                        <span className="uppercase font-mono text-[10px] bg-accent/50 px-1 rounded">{asset.mimeType}</span>
+                      )}
+                      {asset.filePath && <span className="truncate max-w-xs font-mono">{asset.filePath}</span>}
+                      {asset.type !== "stream" && <span>{formatDuration(asset.duration)}</span>}
+                      {asset.type !== "stream" && <span>{formatBytes(asset.fileSize)}</span>}
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
@@ -299,54 +301,55 @@ export default function AssetsPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+      <Dialog open={streamOpen} onOpenChange={setStreamOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Register Asset</DialogTitle>
-            <DialogDescription>Register an existing file on the server by its path.</DialogDescription>
+            <DialogTitle>Add Stream</DialogTitle>
+            <DialogDescription>Add an RTMP or M3U8/HLS stream URL as a playout source.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-2">
               <Label>Name</Label>
-              <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="My Video Clip" />
+              <Input value={streamForm.name} onChange={(e) => setStreamForm({ ...streamForm, name: e.target.value })} placeholder="Live Feed 1" />
             </div>
             <div className="space-y-2">
-              <Label>Type</Label>
-              <Select value={form.type} onValueChange={(v) => setForm({ ...form, type: v })}>
+              <Label>Protocol</Label>
+              <Select value={streamForm.protocol} onValueChange={(v) => setStreamForm({ ...streamForm, protocol: v as "rtmp" | "m3u8" })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="video">Video</SelectItem>
-                  <SelectItem value="image">Image</SelectItem>
-                  <SelectItem value="audio">Audio</SelectItem>
+                  <SelectItem value="rtmp">RTMP / RTMPS</SelectItem>
+                  <SelectItem value="m3u8">M3U8 / HLS</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>File Path</Label>
-              <Input value={form.filePath} onChange={(e) => setForm({ ...form, filePath: e.target.value })} placeholder="/media/clips/my-video.mp4" />
-            </div>
-            <div className="space-y-2">
-              <Label>Duration (seconds)</Label>
-              <Input type="number" value={form.duration} onChange={(e) => setForm({ ...form, duration: e.target.value })} placeholder="120" />
-            </div>
-            <div className="space-y-2">
-              <Label>Description</Label>
-              <Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Optional description" rows={2} />
+              <Label>Stream URL</Label>
+              <Input
+                value={streamForm.url}
+                onChange={(e) => setStreamForm({ ...streamForm, url: e.target.value })}
+                placeholder={streamForm.protocol === "rtmp" ? "rtmp://server/live/stream_key" : "https://server/path/playlist.m3u8"}
+              />
+              <p className="text-xs text-muted-foreground">
+                {streamForm.protocol === "rtmp"
+                  ? "Full RTMP or RTMPS URL including stream key"
+                  : "Full URL to an M3U8 playlist (HLS)"}
+              </p>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setStreamOpen(false)}>Cancel</Button>
             <Button
-              disabled={!form.name || createMutation.isPending}
-              onClick={() => createMutation.mutate({
-                name: form.name,
-                type: form.type,
-                filePath: form.filePath || undefined,
-                duration: form.duration ? parseInt(form.duration) : undefined,
-                description: form.description || undefined,
+              disabled={!streamForm.name || !streamForm.url || streamMutation.isPending}
+              onClick={() => streamMutation.mutate({
+                name: streamForm.name,
+                type: "stream",
+                filePath: streamForm.url,
+                filename: streamForm.name,
+                mimeType: streamForm.protocol,
+                status: "ready",
               })}
             >
-              {createMutation.isPending ? "Registering…" : "Register"}
+              {streamMutation.isPending ? "Adding…" : "Add Stream"}
             </Button>
           </DialogFooter>
         </DialogContent>

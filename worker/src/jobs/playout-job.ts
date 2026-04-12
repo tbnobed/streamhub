@@ -384,9 +384,28 @@ export class PlayoutJobRunner {
     }
 
     if (this.job.sourceMode === "playlist" && this.job.sourceRef) {
-      const playlistPath = `/tmp/playlist_${this.job.id}.txt`;
       const files = this.job.sourceRef.split(",").map((f) => f.trim()).filter(Boolean);
-      const content = generateConcatPlaylistContent(files);
+      const streamUrls = files.filter((f) => this.isStreamUrl(f));
+      const localFiles = files.filter((f) => !this.isStreamUrl(f));
+
+      if (streamUrls.length > 0 && localFiles.length === 0) {
+        const inputUrl = streamUrls[0]!;
+        const args = [
+          "ffmpeg",
+          "-hide_banner",
+          "-loglevel", "info",
+          "-stats",
+          "-re",
+        ];
+        if (inputUrl.endsWith(".m3u8") || inputUrl.includes(".m3u8?")) {
+          args.push("-protocol_whitelist", "file,http,https,tcp,tls,crypto");
+        }
+        args.push("-i", inputUrl);
+        return args;
+      }
+
+      const playlistPath = `/tmp/playlist_${this.job.id}.txt`;
+      const content = generateConcatPlaylistContent(localFiles.length > 0 ? localFiles : files);
       await mkdir(path.dirname(playlistPath), { recursive: true });
       await writeFile(playlistPath, content, "utf-8");
 
@@ -433,25 +452,59 @@ export class PlayoutJobRunner {
     return null;
   }
 
+  private isStreamUrl(url: string): boolean {
+    return url.startsWith("rtmp://") || url.startsWith("rtmps://") ||
+      url.endsWith(".m3u8") || url.includes(".m3u8?");
+  }
+
   private async buildArgs(): Promise<string[] | null> {
     const destinations = this.job.destinations ?? [];
 
     if (this.job.sourceMode === "playlist" && this.job.sourceRef) {
-      const playlistPath = `/tmp/playlist_${this.job.id}.txt`;
       const files = this.job.sourceRef.split(",").map((f) => f.trim()).filter(Boolean);
-      const content = generateConcatPlaylistContent(files);
 
-      await mkdir(path.dirname(playlistPath), { recursive: true });
-      await writeFile(playlistPath, content, "utf-8");
+      const streamUrls = files.filter((f) => this.isStreamUrl(f));
+      const localFiles = files.filter((f) => !this.isStreamUrl(f));
 
-      const hasHttpUrls = files.some((f) => f.startsWith("http://") || f.startsWith("https://"));
+      if (streamUrls.length > 0 && localFiles.length === 0) {
+        const inputUrl = streamUrls[0]!;
+        const args = [
+          "ffmpeg",
+          "-hide_banner",
+          "-loglevel", "info",
+          "-stats",
+          "-re",
+        ];
+        if (inputUrl.endsWith(".m3u8") || inputUrl.includes(".m3u8?")) {
+          args.push("-protocol_whitelist", "file,http,https,tcp,tls,crypto");
+        }
+        args.push("-i", inputUrl, "-c:v", "copy", "-c:a", "copy");
+        for (const dest of destinations) {
+          if (dest.platform === "srt") {
+            args.push("-f", "mpegts", dest.streamUrl);
+          } else {
+            const rtmpUrl = `${dest.streamUrl}/${dest.streamKey}`.replace(/\/+$/, "");
+            args.push("-f", "flv", rtmpUrl);
+          }
+        }
+        return args;
+      }
 
-      return buildPlaylistCommand({
-        playlistFile: playlistPath,
-        destinations,
-        loop: this.job.loopPlaylist !== false,
-        protocolWhitelist: hasHttpUrls,
-      });
+      if (localFiles.length > 0) {
+        const playlistPath = `/tmp/playlist_${this.job.id}.txt`;
+        const content = generateConcatPlaylistContent(localFiles);
+        await mkdir(path.dirname(playlistPath), { recursive: true });
+        await writeFile(playlistPath, content, "utf-8");
+
+        const hasHttpUrls = localFiles.some((f) => f.startsWith("http://") || f.startsWith("https://"));
+
+        return buildPlaylistCommand({
+          playlistFile: playlistPath,
+          destinations,
+          loop: this.job.loopPlaylist !== false,
+          protocolWhitelist: hasHttpUrls,
+        });
+      }
     }
 
     if (this.job.sourceMode === "playlist" && !this.job.sourceRef) {
