@@ -458,7 +458,7 @@ router.post("/channels/:id/switch-source", async (req, res): Promise<void> => {
   res.json(channel);
 });
 
-router.get("/:id/preview/:file", (req, res) => {
+router.get("/channels/:id/preview/:file", (req, res) => {
   const channelId = req.params.id;
   const file = req.params.file;
 
