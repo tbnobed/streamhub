@@ -113,6 +113,13 @@ export class PlayoutJobRunner {
     }, 5000);
   }
 
+  private get shouldReencode(): boolean {
+    if (this.job.sourceMode === "single_asset" || this.job.sourceMode === "fallback") {
+      return !!this.job.sourceRef && !this.isStreamUrl(this.job.sourceRef);
+    }
+    return false;
+  }
+
   private async launchDestProcess(
     destId: string,
     destName: string,
@@ -126,13 +133,27 @@ export class PlayoutJobRunner {
     const outputUrl = isSrt
       ? dest.streamUrl
       : `${dest.streamUrl}/${dest.streamKey}`.replace(/\/+$/, "");
-    const args = [
-      ...inputArgs,
-      "-c:v", "copy",
-      "-c:a", "copy",
-      "-f", isSrt ? "mpegts" : "flv",
-      outputUrl,
-    ];
+    const args = [...inputArgs];
+
+    if (this.shouldReencode) {
+      args.push(
+        "-map", "0:v:0?", "-map", "0:a:0?",
+        "-c:v", "libx264", "-preset", "veryfast",
+        "-b:v", "4000k", "-maxrate", "4500k", "-bufsize", "9000k",
+        "-vf", "scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2",
+        "-g", "60",
+        "-c:a", "aac", "-b:a", "128k", "-ar", "44100",
+        "-f", isSrt ? "mpegts" : "flv",
+        outputUrl,
+      );
+    } else {
+      args.push(
+        "-c:v", "copy",
+        "-c:a", "copy",
+        "-f", isSrt ? "mpegts" : "flv",
+        outputUrl,
+      );
+    }
 
     if (includePreview) {
       args.push(...this.previewHlsArgs);
