@@ -420,10 +420,10 @@ export default function LiveInputsPage() {
                       </div>
                       {input.ingestUrl && (
                         <div className="mt-3 space-y-1">
-                          <div className="text-xs text-muted-foreground">Ingest URL</div>
+                          <div className="text-xs text-muted-foreground">Server URL</div>
                           <div className="flex items-center gap-2 bg-muted rounded px-2 py-1">
-                            <code className="text-xs flex-1 truncate">{input.ingestUrl}</code>
-                            <CopyButton text={input.ingestUrl} />
+                            <code className="text-xs flex-1 truncate">{input.ingestUrl.replace(/\/[^/]+$/, "")}</code>
+                            <CopyButton text={input.ingestUrl.replace(/\/[^/]+$/, "")} />
                           </div>
                           <div className="text-xs text-muted-foreground mt-1">Stream Key</div>
                           <div className="flex items-center gap-2 bg-muted rounded px-2 py-1">
