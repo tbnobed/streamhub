@@ -1,0 +1,35 @@
+
+ ✔ api                          Built                                                                                             0.0s
+ ✔ frontend                     Built                                                                                             0.0s
+ ✔ worker                       Built                                                                                             0.0s
+ ✔ Container deploy-postgres-1  Healthy                                                                                          12.2s
+ ✔ Container deploy-api-1       Started                                                                                          12.6s
+ ✔ Container deploy-worker-1    Started                                                                                           2.3s
+ ✔ Container deploy-frontend-1  Started                                                                                           2.4s
+[UPDATE] Running database migrations...
+WARN[0000] /home/ubuntu/streamhub/deploy/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it                                                                   to avoid potential confusion
+[+] Creating 1/1
+ ✔ Container deploy-postgres-1  Running                                                                                           0.0s
+Reading config file '/app/lib/db/drizzle.config.ts'
+Using 'pg' driver for database querying
+[✓] Pulling schema from database...
+[✓] Changes applied
+[UPDATE] Restarting API to pick up schema changes...
+WARN[0000] /home/ubuntu/streamhub/deploy/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it                                                                   to avoid potential confusion
+[+] Restarting 2/2
+ ✔ Container deploy-worker-1  Started                                                                                             0.8s
+ ✔ Container deploy-api-1     Started                                                                                            10.8s
+[UPDATE] Done.
+WARN[0000] /home/ubuntu/streamhub/deploy/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it                                                                   to avoid potential confusion
+NAME                IMAGE                COMMAND                  SERVICE    CREATED          STATUS                  PORTS
+deploy-api-1        deploy-api           "docker-entrypoint.s…"   api        28 seconds ago   Up Less than a second   8080/tcp
+deploy-frontend-1   deploy-frontend      "/docker-entrypoint.…"   frontend   17 seconds ago   Up 15 seconds           0.0.0.0:80->80/tc                                                                  p, [::]:80->80/tcp
+deploy-postgres-1   postgres:16-alpine   "docker-entrypoint.s…"   postgres   2 days ago       Up 2 days (healthy)     5432/tcp
+deploy-worker-1     deploy-worker        "docker-entrypoint.s…"   worker     17 seconds ago   Up 10 seconds
+ubuntu@obtv-xtreem:~/streamhub$ htop
+ubuntu@obtv-xtreem:~/streamhub$ sudo docker compose logs -f
+WARN[0000] The "PGPASSWORD" variable is not set. Defaulting to a blank string.
+WARN[0000] The "PGPASSWORD" variable is not set. Defaulting to a blank string.
+WARN[0000] The "SESSION_SECRET" variable is not set. Defaulting to a blank string.
+WARN[0000] /home/ubuntu/streamhub/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion
+ubuntu@obtv-xtreem:~/streamhub$ sudo docker compose logs
