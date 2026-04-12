@@ -1,5 +1,5 @@
 import { spawn, type ChildProcess } from "node:child_process";
-import { writeFile, mkdir } from "node:fs/promises";
+import { writeFile, mkdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { logger } from "../lib/logger.js";
 import { buildFileLoopCommand, buildPlaylistCommand, generateConcatPlaylistContent } from "./ffmpeg-builder.js";
@@ -27,14 +27,52 @@ export class PlayoutJobRunner {
   private lastFps = 0;
   private lastStatsSentAt = 0;
   private statsInterval: ReturnType<typeof setInterval> | null = null;
+  private previewDir: string;
 
   constructor(job: PlayoutJob, api: ApiClient) {
     this.job = job;
     this.api = api;
+    this.previewDir = `/tmp/preview/channel-${job.channelId}`;
+  }
+
+  private get previewHlsArgs(): string[] {
+    const hlsPath = path.join(this.previewDir, "stream.m3u8");
+    return [
+      "-map", "0:v:0?", "-map", "0:a:0?",
+      "-c:v", "libx264",
+      "-preset", "ultrafast",
+      "-tune", "zerolatency",
+      "-b:v", "800k",
+      "-maxrate", "800k",
+      "-bufsize", "1600k",
+      "-vf", "scale=640:-2",
+      "-g", "30",
+      "-c:a", "aac",
+      "-b:a", "96k",
+      "-ar", "44100",
+      "-f", "hls",
+      "-hls_time", "2",
+      "-hls_list_size", "5",
+      "-hls_flags", "delete_segments+append_list",
+      "-hls_segment_filename", path.join(this.previewDir, "seg_%03d.ts"),
+      hlsPath,
+    ];
+  }
+
+  private async initPreviewDir(): Promise<void> {
+    await rm(this.previewDir, { recursive: true, force: true });
+    await mkdir(this.previewDir, { recursive: true });
+  }
+
+  private async cleanupPreviewDir(): Promise<void> {
+    try {
+      await rm(this.previewDir, { recursive: true, force: true });
+    } catch {}
   }
 
   async start(): Promise<void> {
     this.stopped = false;
+    await this.initPreviewDir();
     const destinations = this.job.destinations ?? [];
 
     if (destinations.length > 1) {
@@ -63,10 +101,11 @@ export class PlayoutJobRunner {
       message: `Starting ${destinations.length} output processes`,
     });
 
-    for (const dest of destinations) {
+    for (let i = 0; i < destinations.length; i++) {
+      const dest = destinations[i]!;
       const destId = String((dest as Record<string, unknown>).id ?? dest.streamKey);
       const destName = (dest as Record<string, unknown>).name as string ?? dest.platform;
-      await this.launchDestProcess(destId, destName, dest, inputArgs);
+      await this.launchDestProcess(destId, destName, dest, inputArgs, i === 0);
     }
 
     this.statsInterval = setInterval(() => {
@@ -79,6 +118,7 @@ export class PlayoutJobRunner {
     destName: string,
     dest: { streamUrl: string; streamKey: string; platform: string },
     inputArgs: string[],
+    includePreview = false,
   ): Promise<void> {
     if (this.stopped) return;
 
@@ -93,6 +133,10 @@ export class PlayoutJobRunner {
       "-f", isSrt ? "mpegts" : "flv",
       outputUrl,
     ];
+
+    if (includePreview) {
+      args.push(...this.previewHlsArgs);
+    }
 
     logger.info({ jobId: this.job.id, destId, destName, cmd: args.join(" ") }, "Launching FFmpeg for destination");
 
@@ -229,6 +273,8 @@ export class PlayoutJobRunner {
       await this.api.updateJobStatus(this.job.id, "failed", { errorMessage: "Could not build FFmpeg command" });
       return;
     }
+
+    args.push(...this.previewHlsArgs);
 
     logger.info({ jobId: this.job.id, cmd: args.join(" ") }, "Launching FFmpeg");
 
@@ -552,6 +598,8 @@ export class PlayoutJobRunner {
       clearInterval(this.statsInterval);
       this.statsInterval = null;
     }
+
+    this.cleanupPreviewDir();
 
     for (const [, dp] of this.destProcesses) {
       if (dp.process && !dp.process.killed) {

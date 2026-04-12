@@ -65,6 +65,7 @@ All routes under `/api`:
 - `POST /api/channels/:id/start` — Start channel
 - `POST /api/channels/:id/stop` — Stop channel
 - `POST /api/channels/:id/switch-source` — Hot-switch source
+- `GET /api/channels/:id/preview/:file` — HLS preview files (stream.m3u8 + segments)
 - `GET/POST /api/assets` — Asset library
 - `GET/POST /api/playlists` — Playlists
 - `GET/POST/DELETE /api/playlists/:id/items` — Playlist items
@@ -88,6 +89,7 @@ Located in `worker/`. Runs FFmpeg jobs assigned by the API.
 - Sends heartbeat every 15s
 - Auto-restarts failed FFmpeg processes (up to 5 times per destination)
 - Supports: playlist loop, live RTMP/SRT ingest, fallback slate
+- **Channel output preview**: Every running FFmpeg job produces a low-bitrate HLS sidecar (800k, 640px, 2s segments) at `/tmp/preview/channel-{id}/`. The API serves these via `GET /channels/:id/preview/:file` and the frontend plays them with HLS.js. Preview dir is cleaned up when the job stops.
 - Reports stream health (bitrate/fps) from FFmpeg stderr, throttled to every 5s
 - FFmpeg uses `-loglevel info -stats` for progress output
 - API rejects worker status updates that try to flip terminal jobs (stopped/failed/completed) back to running

@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Play, Square, ChevronLeft, RefreshCw, Activity, Tv2, Radio, Copy, Check, MonitorPlay, Plus, Trash2, Send, Zap, Clock, Calendar } from "lucide-react";
 import { useState, useRef, useEffect, useMemo } from "react";
+import Hls from "hls.js";
 import { apiBase } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/context/auth";
@@ -154,6 +155,139 @@ interface PreviewUrls {
   flv: string;
   hls: string;
   whep: string;
+}
+
+function ChannelOutputPreview({ channelId, isLive }: { channelId: string; isLive: boolean }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const hlsRef = useRef<Hls | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
+
+  const hlsUrl = `${apiBase()}/channels/${channelId}/preview/stream.m3u8`;
+
+  useEffect(() => {
+    if (!isLive || !videoRef.current) {
+      setError(null);
+      return;
+    }
+
+    const retryDelay = setTimeout(() => {
+      const video = videoRef.current;
+      if (!video) return;
+
+      if (Hls.isSupported()) {
+        const hls = new Hls({
+          liveSyncDurationCount: 3,
+          liveMaxLatencyDurationCount: 6,
+          enableWorker: true,
+          lowLatencyMode: true,
+        });
+
+        hls.loadSource(hlsUrl);
+        hls.attachMedia(video);
+
+        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+          video.play().catch(() => {});
+          setError(null);
+        });
+
+        hls.on(Hls.Events.ERROR, (_event, data) => {
+          if (data.fatal) {
+            if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+              if (retryCount < 10) {
+                setTimeout(() => setRetryCount((c) => c + 1), 3000);
+              } else {
+                setError("Preview stream not yet available");
+              }
+            } else {
+              setError("Preview playback error");
+            }
+            hls.destroy();
+          }
+        });
+
+        hlsRef.current = hls;
+      } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
+        video.src = hlsUrl;
+        video.addEventListener("loadedmetadata", () => video.play().catch(() => {}));
+      } else {
+        setError("HLS not supported in this browser");
+      }
+    }, retryCount === 0 ? 5000 : 1000);
+
+    return () => {
+      clearTimeout(retryDelay);
+      if (hlsRef.current) {
+        hlsRef.current.destroy();
+        hlsRef.current = null;
+      }
+    };
+  }, [isLive, hlsUrl, retryCount]);
+
+  useEffect(() => {
+    if (!isLive) {
+      setRetryCount(0);
+      setError(null);
+      if (hlsRef.current) {
+        hlsRef.current.destroy();
+        hlsRef.current = null;
+      }
+    }
+  }, [isLive]);
+
+  if (!isLive) {
+    return (
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center gap-2">
+            <MonitorPlay className="w-4 h-4" />Output Preview
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="bg-muted/30 rounded-lg flex flex-col items-center justify-center gap-2" style={{ height: "180px" }}>
+            <Tv2 className="w-8 h-8 text-muted-foreground/20" />
+            <p className="text-xs text-muted-foreground text-center">Start the channel to see output preview</p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base flex items-center gap-2">
+          <MonitorPlay className="w-4 h-4" />
+          Output Preview
+          <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        {error ? (
+          <div className="bg-muted/30 rounded-lg flex flex-col items-center justify-center gap-2" style={{ height: "180px" }}>
+            <Tv2 className="w-8 h-8 text-muted-foreground/20" />
+            <p className="text-xs text-muted-foreground text-center">{error}</p>
+            <button
+              className="text-xs text-blue-400 hover:text-blue-300"
+              onClick={() => { setError(null); setRetryCount(0); }}
+            >
+              Retry
+            </button>
+          </div>
+        ) : (
+          <div className="bg-black rounded-lg overflow-hidden" style={{ height: "180px" }}>
+            <video
+              ref={videoRef}
+              className="w-full h-full object-contain"
+              muted
+              playsInline
+              controls
+            />
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
 }
 
 function CompactPreview({ streamKey }: { streamKey: string }) {
@@ -592,23 +726,7 @@ export default function ChannelDetailPage() {
             </CardContent>
           </Card>
 
-          {channel.sourceMode === "live_input" && channel.liveInput ? (
-            <CompactPreview streamKey={channel.liveInput.streamKey} />
-          ) : (
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <MonitorPlay className="w-4 h-4" />Live Preview
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="bg-muted/30 rounded-lg flex flex-col items-center justify-center gap-2" style={{ height: "180px" }}>
-                  <Tv2 className="w-8 h-8 text-muted-foreground/20" />
-                  <p className="text-xs text-muted-foreground text-center">Switch to a live input to enable preview</p>
-                </div>
-              </CardContent>
-            </Card>
-          )}
+          <ChannelOutputPreview channelId={channelId!} isLive={isLive} />
         </div>
 
         {channel.activeJob && (

@@ -1,4 +1,6 @@
 import { Router, type IRouter } from "express";
+import { existsSync } from "node:fs";
+import path from "node:path";
 import { db } from "@workspace/db";
 import { LocalStorageService } from "../lib/objectStorage";
 import {
@@ -436,6 +438,36 @@ router.post("/channels/:id/switch-source", async (req, res): Promise<void> => {
   });
 
   res.json(channel);
+});
+
+router.get("/:id/preview/:file", (req, res) => {
+  const channelId = req.params.id;
+  const file = req.params.file;
+
+  if (!/^[\w.-]+$/.test(file)) {
+    return res.status(400).json({ error: "Invalid filename" });
+  }
+
+  const previewDir = `/tmp/preview/channel-${channelId}`;
+  const filePath = path.join(previewDir, file);
+
+  if (!existsSync(filePath)) {
+    return res.status(404).json({ error: "Preview not available" });
+  }
+
+  const ext = path.extname(file).toLowerCase();
+  const mimeTypes: Record<string, string> = {
+    ".m3u8": "application/vnd.apple.mpegurl",
+    ".ts": "video/mp2t",
+  };
+
+  res.set({
+    "Content-Type": mimeTypes[ext] ?? "application/octet-stream",
+    "Cache-Control": "no-cache, no-store, must-revalidate",
+    "Access-Control-Allow-Origin": "*",
+  });
+
+  res.sendFile(filePath);
 });
 
 export default router;
