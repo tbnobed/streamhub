@@ -15,7 +15,7 @@ import {
   streamSessionsTable,
   auditLogsTable,
 } from "@workspace/db";
-import { eq, count, and, asc } from "drizzle-orm";
+import { eq, count, and, asc, desc } from "drizzle-orm";
 import {
   CreateChannelBody,
   GetChannelParams,
@@ -126,7 +126,40 @@ router.get("/channels/:id", async (req, res): Promise<void> => {
         bitrate: job.bitrate,
         fps: job.fps ? Number(job.fps) : null,
         destinationHealth: job.destinationHealth,
+        errorMessage: job.errorMessage,
       };
+    }
+  }
+  if (!activeJob && (channel.status === "error" || channel.status === "on_air")) {
+    const [lastJob] = await db.select().from(playoutJobsTable)
+      .where(and(
+        eq(playoutJobsTable.channelId, channel.id),
+        eq(playoutJobsTable.status, "failed"),
+      ))
+      .orderBy(desc(playoutJobsTable.stoppedAt))
+      .limit(1);
+    if (lastJob) {
+      activeJob = {
+        id: lastJob.id,
+        status: lastJob.status,
+        sourceMode: lastJob.sourceMode,
+        sourceRef: lastJob.sourceRef,
+        workerId: lastJob.workerId,
+        ffmpegCommand: lastJob.ffmpegCommand,
+        destinations: lastJob.destinations,
+        startedAt: lastJob.startedAt,
+        stoppedAt: lastJob.stoppedAt,
+        bitrate: null,
+        fps: null,
+        destinationHealth: lastJob.destinationHealth,
+        errorMessage: lastJob.errorMessage,
+      };
+      if (channel.status === "on_air") {
+        await db.update(channelsTable)
+          .set({ status: "error", activeJobId: null })
+          .where(eq(channelsTable.id, channel.id));
+        channel.status = "error";
+      }
     }
   }
 

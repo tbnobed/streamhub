@@ -623,8 +623,9 @@ export default function ChannelDetailPage() {
   }
 
   const isLive = channel.status === "on_air" || channel.status === "live";
-  const canStart = channel.status === "idle" || channel.status === "error";
-  const canStop = isLive || channel.status === "starting";
+  const isError = channel.status === "error";
+  const canStart = channel.status === "idle" || isError;
+  const canStop = isLive || channel.status === "starting" || isError;
 
   return (
     <AppShell>
@@ -663,7 +664,18 @@ export default function ChannelDetailPage() {
               {isLive && <RefreshCw className="w-4 h-4 text-muted-foreground animate-spin" style={{ animationDuration: "5s" }} />}
             </CardHeader>
             <CardContent>
-              {isLive ? (() => {
+              {channel.status === "error" ? (
+                <div className="py-6 text-center">
+                  <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-red-500/10 mb-3">
+                    <Activity className="w-6 h-6 text-red-500" />
+                  </div>
+                  <p className="text-sm font-medium text-red-400 mb-1">Stream Failed</p>
+                  <p className="text-xs text-muted-foreground">
+                    {channel.activeJob?.errorMessage || "The stream encountered an error and was stopped."}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-2">Click Start to restart the channel.</p>
+                </div>
+              ) : isLive ? (() => {
                 const jobBitrate = channel.activeJob?.bitrate;
                 const jobFps = channel.activeJob?.fps;
                 const jobStarted = channel.activeJob?.startedAt;

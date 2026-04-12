@@ -13,6 +13,7 @@ import {
 import { eq, and, asc, desc } from "drizzle-orm";
 import { logger } from "./logger";
 import { LocalStorageService } from "./objectStorage";
+import { reapStaleWorkerJobs } from "./jobCleanup";
 
 const RESTART_COOLDOWN_MS = 5 * 60 * 1000;
 
@@ -261,7 +262,11 @@ export function startScheduler(): void {
   if (intervalId) return;
   logger.info("Channel scheduler started (30s interval)");
   checkSchedules();
-  intervalId = setInterval(checkSchedules, 30_000);
+  reapStaleWorkerJobs();
+  intervalId = setInterval(() => {
+    checkSchedules();
+    reapStaleWorkerJobs();
+  }, 30_000);
 }
 
 export function stopScheduler(): void {
