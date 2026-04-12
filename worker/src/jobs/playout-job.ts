@@ -217,6 +217,13 @@ export class PlayoutJobRunner {
       if (this.stopped) return;
 
       if (dp.restartCount < this.maxRestarts) {
+        const jobCheck = await this.api.fetchJobStatus(this.job.id);
+        if (jobCheck && jobCheck.status !== "running") {
+          logger.info({ jobId: this.job.id, destId, dbStatus: jobCheck.status }, "Job no longer running in DB, skipping dest restart");
+          this.stopped = true;
+          return;
+        }
+
         dp.restartCount++;
         dp.error = `Process exited (code ${code}), restarting (${dp.restartCount}/${this.maxRestarts})`;
 
@@ -404,6 +411,13 @@ export class PlayoutJobRunner {
       }
 
       if (this.restartCount < this.maxRestarts) {
+        const jobCheck = await this.api.fetchJobStatus(this.job.id);
+        if (jobCheck && jobCheck.status !== "running") {
+          logger.info({ jobId: this.job.id, dbStatus: jobCheck.status }, "Job no longer running in DB, skipping restart");
+          this.stopped = true;
+          return;
+        }
+
         this.restartCount++;
         logger.info({ jobId: this.job.id, restartCount: this.restartCount }, "Restarting FFmpeg");
 

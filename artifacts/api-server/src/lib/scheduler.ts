@@ -299,6 +299,21 @@ async function checkSchedules(): Promise<void> {
       }
 
       if (shouldBeOn && (channel.status === "idle" || channel.status === "error")) {
+        const [lastManualStop] = await db.select({ stoppedAt: playoutJobsTable.stoppedAt })
+          .from(playoutJobsTable)
+          .where(and(eq(playoutJobsTable.channelId, channel.id), eq(playoutJobsTable.status, "stopped")))
+          .orderBy(desc(playoutJobsTable.stoppedAt))
+          .limit(1);
+
+        if (lastManualStop?.stoppedAt) {
+          const elapsed = Date.now() - new Date(lastManualStop.stoppedAt).getTime();
+          if (elapsed < 120_000) {
+            logger.info({ channelId: channel.id, elapsedSec: Math.round(elapsed / 1000) },
+              "Scheduler: skipping start, channel was recently stopped manually");
+            continue;
+          }
+        }
+
         const isRecovery = channel.status === "error";
         await startChannel(channel.id, { isRecovery });
       } else if (!shouldBeOn && (channel.status === "on_air" || channel.status === "error")) {

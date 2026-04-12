@@ -19,7 +19,7 @@ Port 80 (proxy)
 ## Key Features
 - Channel management (start/stop/switch-source) with playout job creation
 - **Channel scheduling**: Auto-start/stop streams at configured times with timezone support and day-of-week selection; scheduler runs every 30s on the API server
-- **Auto-recovery**: Failed channels automatically restart after 30s cooldown; stops after 5 consecutive failures within 30 min; works for both scheduled and manually-started channels; stale worker jobs reaped after 60s heartbeat timeout
+- **Auto-recovery**: Failed channels automatically restart after 30s cooldown; stops after 5 consecutive failures within 30 min; works for both scheduled and manually-started channels; stale worker jobs reaped after 60s heartbeat timeout; worker checks job DB status before FFmpeg restart to prevent restarting intentionally-stopped streams; scheduler respects manual stops for 2 minutes before auto-restarting scheduled channels
 - Asset library (register video/image/audio files)
 - Playlist builder with drag-and-drop ordering
 - Live RTMP/SRT ingest endpoints with stream key generation

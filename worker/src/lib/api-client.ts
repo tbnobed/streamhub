@@ -65,6 +65,14 @@ export class ApiClient {
     });
   }
 
+  async fetchJobStatus(jobId: number): Promise<{ status: string } | null> {
+    try {
+      return await this.fetch<{ status: string }>(`/workers/jobs/${jobId}/check`);
+    } catch {
+      return null;
+    }
+  }
+
   async clearDestinationCommand(jobId: number, destId: string): Promise<void> {
     await this.fetch(`/workers/jobs/${jobId}/dest-command-ack`, {
       method: "POST",

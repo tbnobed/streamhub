@@ -125,6 +125,11 @@ router.post("/workers/jobs/:id/status", async (req, res): Promise<void> => {
     return;
   }
 
+  if (existingJob.status === "stopped" && parsed.data.status === "stopped") {
+    res.json({ ok: true, ignored: true, reason: "already_stopped" });
+    return;
+  }
+
   const updates: Record<string, unknown> = {
     status: parsed.data.status,
   };
@@ -156,6 +161,20 @@ router.post("/workers/jobs/:id/status", async (req, res): Promise<void> => {
   }
 
   res.json({ ok: true });
+});
+
+router.get("/workers/jobs/:id/check", async (req, res): Promise<void> => {
+  const jobId = Number(req.params.id);
+  if (!jobId) {
+    res.status(400).json({ error: "Invalid job ID" });
+    return;
+  }
+  const [job] = await db.select({ status: playoutJobsTable.status }).from(playoutJobsTable).where(eq(playoutJobsTable.id, jobId));
+  if (!job) {
+    res.status(404).json({ error: "Job not found" });
+    return;
+  }
+  res.json({ status: job.status });
 });
 
 router.post("/workers/jobs/:id/dest-command-ack", async (req, res): Promise<void> => {
