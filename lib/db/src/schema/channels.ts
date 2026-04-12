@@ -10,6 +10,7 @@ export const channelsTable = pgTable("channels", {
   sourceMode: text("source_mode").notNull().default("playlist"),
   activePlaylistId: integer("active_playlist_id"),
   activeLiveInputId: integer("active_live_input_id"),
+  activeAssetId: integer("active_asset_id"),
   activeJobId: integer("active_job_id"),
   fallbackAssetId: integer("fallback_asset_id"),
   loopPlaylist: boolean("loop_playlist").notNull().default(true),

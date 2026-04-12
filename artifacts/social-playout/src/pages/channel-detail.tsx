@@ -63,6 +63,7 @@ interface Channel {
   sourceName?: string;
   activePlaylistId?: number;
   activeLiveInputId?: number;
+  activeAssetId?: number;
   activeJobId?: number;
   loopPlaylist?: boolean;
   bitrate?: number;
@@ -76,6 +77,7 @@ interface Channel {
   scheduleDays?: number[];
   playlist?: { id: number; name: string };
   liveInput?: { id: number; name: string; protocol: string; streamKey: string; ingestUrl: string; status: string };
+  activeAsset?: { id: number; name: string; filename: string; mimeType: string };
   destinations?: Array<{ id: number; name: string; platform: string; streamUrl: string }>;
   activeJob?: ActiveJob | null;
 }
@@ -447,6 +449,7 @@ export default function ChannelDetailPage() {
   const [selectedSourceMode, setSelectedSourceMode] = useState("");
   const [switchPlaylist, setSwitchPlaylist] = useState("");
   const [switchLiveInput, setSwitchLiveInput] = useState("");
+  const [switchAsset, setSwitchAsset] = useState("");
   const [addDestOpen, setAddDestOpen] = useState(false);
   const [createDestOpen, setCreateDestOpen] = useState(false);
   const [destForm, setDestForm] = useState({ name: "", platform: "rtmp", streamUrl: "", streamKey: "" });
@@ -466,6 +469,11 @@ export default function ChannelDetailPage() {
   const { data: liveInputs = [] } = useQuery<LiveInput[]>({
     queryKey: ["live-inputs"],
     queryFn: () => apiFetch("/live-inputs"),
+  });
+
+  const { data: allAssets = [] } = useQuery<Array<{ id: number; name: string; filename: string; mimeType: string }>>({
+    queryKey: ["assets"],
+    queryFn: () => apiFetch("/assets"),
   });
 
   const { data: channelDests = [], refetch: refetchChannelDests } = useQuery<Destination[]>({
@@ -591,6 +599,8 @@ export default function ChannelDetailPage() {
       switchMutation.mutate({ sourceMode: "playlist", playlistId: Number(switchPlaylist) });
     } else if (mode === "live_input" && switchLiveInput) {
       switchMutation.mutate({ sourceMode: "live_input", liveInputId: Number(switchLiveInput) });
+    } else if (mode === "single_asset" && switchAsset) {
+      switchMutation.mutate({ sourceMode: "single_asset", assetId: Number(switchAsset) });
     } else if (mode === "fallback") {
       switchMutation.mutate({ sourceMode: "fallback" });
     }
@@ -753,6 +763,8 @@ export default function ChannelDetailPage() {
                       ? `Playlist: ${channel.playlist.name}`
                       : channel.sourceMode === "live_input" && channel.liveInput
                       ? `Live: ${channel.liveInput.name}`
+                      : channel.sourceMode === "single_asset" && channel.activeAsset
+                      ? `Asset: ${channel.activeAsset.name}`
                       : channel.sourceMode === "fallback"
                       ? "Fallback Slate"
                       : channel.activeJob.sourceRef}
@@ -830,6 +842,27 @@ export default function ChannelDetailPage() {
                 </div>
               )}
 
+              {channel.sourceMode === "single_asset" && channel.activeAsset && (
+                <div className="rounded-md bg-accent/30 p-3 space-y-2">
+                  <div className="text-xs text-muted-foreground">Active Asset</div>
+                  <div className="font-medium text-sm">{channel.activeAsset.name}</div>
+                  <div className="flex items-center justify-between pt-1 border-t border-border/30">
+                    <Label className="text-xs text-muted-foreground">Loop Asset</Label>
+                    <Switch
+                      checked={channel.loopPlaylist !== false}
+                      onCheckedChange={(checked) => toggleLoopMutation.mutate(checked)}
+                      disabled={toggleLoopMutation.isPending}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {channel.sourceMode === "single_asset" && !channel.activeAsset && (
+                <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3">
+                  <p className="text-xs text-destructive">No asset selected. Choose one below.</p>
+                </div>
+              )}
+
               {channel.sourceMode === "fallback" && (
                 <div className="rounded-md bg-accent/30 p-3">
                   <div className="text-xs text-muted-foreground">Broadcasting fallback slate</div>
@@ -844,11 +877,13 @@ export default function ChannelDetailPage() {
                     setSelectedSourceMode(v);
                     setSwitchPlaylist("");
                     setSwitchLiveInput("");
+                    setSwitchAsset("");
                   }}
                 >
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="playlist">Playlist</SelectItem>
+                    <SelectItem value="single_asset">Single Asset</SelectItem>
                     <SelectItem value="live_input">Live Input</SelectItem>
                     <SelectItem value="fallback">Fallback Slate</SelectItem>
                   </SelectContent>
@@ -891,6 +926,23 @@ export default function ChannelDetailPage() {
                   </div>
                 )}
 
+                {activeSourceMode === "single_asset" && (
+                  <div className="space-y-2">
+                    <Label className="text-xs">Select Asset</Label>
+                    <Select value={switchAsset} onValueChange={setSwitchAsset}>
+                      <SelectTrigger><SelectValue placeholder="Choose asset…" /></SelectTrigger>
+                      <SelectContent>
+                        {allAssets.map((a) => (
+                          <SelectItem key={a.id} value={String(a.id)}>{a.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {allAssets.length === 0 && (
+                      <p className="text-xs text-muted-foreground">No assets uploaded. Upload files on the Assets page.</p>
+                    )}
+                  </div>
+                )}
+
                 {activeSourceMode === "fallback" && (
                   <p className="text-xs text-muted-foreground">Will broadcast the fallback slate until switched to another source.</p>
                 )}
@@ -901,7 +953,8 @@ export default function ChannelDetailPage() {
                   disabled={
                     switchMutation.isPending ||
                     (activeSourceMode === "playlist" && !switchPlaylist) ||
-                    (activeSourceMode === "live_input" && !switchLiveInput)
+                    (activeSourceMode === "live_input" && !switchLiveInput) ||
+                    (activeSourceMode === "single_asset" && !switchAsset)
                   }
                   onClick={handleSwitchSource}
                 >

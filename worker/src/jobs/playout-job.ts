@@ -483,14 +483,15 @@ export class PlayoutJobRunner {
       return args;
     }
 
-    if (this.job.sourceMode === "fallback" && this.job.sourceRef) {
+    if ((this.job.sourceMode === "fallback" || this.job.sourceMode === "single_asset") && this.job.sourceRef) {
+      const loop = this.job.sourceMode === "single_asset" ? (this.job.loopPlaylist !== false) : true;
       return [
         "ffmpeg",
         "-hide_banner",
         "-loglevel", "info",
         "-stats",
         "-re",
-        "-stream_loop", "-1",
+        ...(loop ? ["-stream_loop", "-1"] : []),
         "-i", this.job.sourceRef,
       ];
     }
@@ -580,11 +581,11 @@ export class PlayoutJobRunner {
       return args;
     }
 
-    if (this.job.sourceMode === "fallback" && this.job.sourceRef) {
+    if ((this.job.sourceMode === "fallback" || this.job.sourceMode === "single_asset") && this.job.sourceRef) {
       return buildFileLoopCommand({
         inputFile: this.job.sourceRef,
         destinations,
-        loop: true,
+        loop: this.job.sourceMode === "single_asset" ? (this.job.loopPlaylist !== false) : true,
       });
     }
 

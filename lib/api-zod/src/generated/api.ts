@@ -242,7 +242,7 @@ export const ListChannelsResponseItem = zod.object({
   name: zod.string(),
   description: zod.string().nullish(),
   status: zod.enum(["idle", "starting", "on_air", "stopping", "error"]),
-  sourceMode: zod.enum(["playlist", "live_input", "fallback"]),
+  sourceMode: zod.enum(["playlist", "live_input", "fallback", "single_asset"]),
   activePlaylistId: zod.number().nullish(),
   activeLiveInputId: zod.number().nullish(),
   fallbackAssetId: zod.number().nullish(),
@@ -277,7 +277,7 @@ export const GetChannelResponse = zod
     name: zod.string(),
     description: zod.string().nullish(),
     status: zod.enum(["idle", "starting", "on_air", "stopping", "error"]),
-    sourceMode: zod.enum(["playlist", "live_input", "fallback"]),
+    sourceMode: zod.enum(["playlist", "live_input", "fallback", "single_asset"]),
     activePlaylistId: zod.number().nullish(),
     activeLiveInputId: zod.number().nullish(),
     fallbackAssetId: zod.number().nullish(),
@@ -378,7 +378,7 @@ export const UpdateChannelResponse = zod.object({
   name: zod.string(),
   description: zod.string().nullish(),
   status: zod.enum(["idle", "starting", "on_air", "stopping", "error"]),
-  sourceMode: zod.enum(["playlist", "live_input", "fallback"]),
+  sourceMode: zod.enum(["playlist", "live_input", "fallback", "single_asset"]),
   activePlaylistId: zod.number().nullish(),
   activeLiveInputId: zod.number().nullish(),
   fallbackAssetId: zod.number().nullish(),
@@ -407,7 +407,7 @@ export const StartChannelResponse = zod.object({
   name: zod.string(),
   description: zod.string().nullish(),
   status: zod.enum(["idle", "starting", "on_air", "stopping", "error"]),
-  sourceMode: zod.enum(["playlist", "live_input", "fallback"]),
+  sourceMode: zod.enum(["playlist", "live_input", "fallback", "single_asset"]),
   activePlaylistId: zod.number().nullish(),
   activeLiveInputId: zod.number().nullish(),
   fallbackAssetId: zod.number().nullish(),
@@ -429,7 +429,7 @@ export const StopChannelResponse = zod.object({
   name: zod.string(),
   description: zod.string().nullish(),
   status: zod.enum(["idle", "starting", "on_air", "stopping", "error"]),
-  sourceMode: zod.enum(["playlist", "live_input", "fallback"]),
+  sourceMode: zod.enum(["playlist", "live_input", "fallback", "single_asset"]),
   activePlaylistId: zod.number().nullish(),
   activeLiveInputId: zod.number().nullish(),
   fallbackAssetId: zod.number().nullish(),
@@ -447,9 +447,10 @@ export const SwitchChannelSourceParams = zod.object({
 });
 
 export const SwitchChannelSourceBody = zod.object({
-  sourceMode: zod.enum(["playlist", "live_input", "fallback"]),
+  sourceMode: zod.enum(["playlist", "live_input", "fallback", "single_asset"]),
   liveInputId: zod.number().nullish(),
   playlistId: zod.number().nullish(),
+  assetId: zod.number().nullish(),
 });
 
 export const SwitchChannelSourceResponse = zod.object({
@@ -457,7 +458,7 @@ export const SwitchChannelSourceResponse = zod.object({
   name: zod.string(),
   description: zod.string().nullish(),
   status: zod.enum(["idle", "starting", "on_air", "stopping", "error"]),
-  sourceMode: zod.enum(["playlist", "live_input", "fallback"]),
+  sourceMode: zod.enum(["playlist", "live_input", "fallback", "single_asset"]),
   activePlaylistId: zod.number().nullish(),
   activeLiveInputId: zod.number().nullish(),
   fallbackAssetId: zod.number().nullish(),

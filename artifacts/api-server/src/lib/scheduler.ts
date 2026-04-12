@@ -106,6 +106,18 @@ async function startChannel(channelId: number): Promise<void> {
       }
     }
     sourceRef = filePaths.join(",");
+  } else if (channel.sourceMode === "single_asset" && channel.activeAssetId) {
+    const [asset] = await db.select().from(assetsTable).where(eq(assetsTable.id, channel.activeAssetId));
+    if (!asset || !asset.filePath) {
+      logger.warn({ channelId, assetId: channel.activeAssetId }, "Scheduler: cannot start channel, asset not found");
+      return;
+    }
+    let fp = asset.filePath;
+    if (fp.startsWith("/api/storage/objects/")) {
+      const storageService2 = new LocalStorageService();
+      fp = storageService2.getAbsolutePath(fp.replace("/api/storage", ""));
+    }
+    sourceRef = fp;
   } else if (channel.sourceMode === "fallback") {
     sourceRef = "fallback:slate";
   } else {

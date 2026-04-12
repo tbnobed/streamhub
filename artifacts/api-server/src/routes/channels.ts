@@ -101,6 +101,10 @@ router.get("/channels/:id", async (req, res): Promise<void> => {
     ? await db.select().from(liveInputsTable).where(eq(liveInputsTable.id, channel.activeLiveInputId!))
     : [null];
 
+  const [activeAsset] = channel.activeAssetId
+    ? await db.select().from(assetsTable).where(eq(assetsTable.id, channel.activeAssetId!))
+    : [null];
+
   const destinations = await db
     .select()
     .from(destinationsTable)
@@ -130,6 +134,7 @@ router.get("/channels/:id", async (req, res): Promise<void> => {
     ...channel,
     playlist: playlist ?? undefined,
     liveInput: liveInput ?? undefined,
+    activeAsset: activeAsset ? { id: activeAsset.id, name: activeAsset.name, filename: activeAsset.filename, mimeType: activeAsset.mimeType } : undefined,
     destinations,
     activeJob,
   });
@@ -264,10 +269,22 @@ router.post("/channels/:id/start", async (req, res): Promise<void> => {
     }
 
     sourceRef = filePaths.join(",");
+  } else if (channel.sourceMode === "single_asset" && channel.activeAssetId) {
+    const [asset] = await db.select().from(assetsTable).where(eq(assetsTable.id, channel.activeAssetId));
+    if (!asset || !asset.filePath) {
+      res.status(400).json({ error: "Selected asset not found or has no file path." });
+      return;
+    }
+    let fp = asset.filePath;
+    if (fp.startsWith("/api/storage/objects/")) {
+      const storageService2 = new LocalStorageService();
+      fp = storageService2.getAbsolutePath(fp.replace("/api/storage", ""));
+    }
+    sourceRef = fp;
   } else if (channel.sourceMode === "fallback") {
     sourceRef = "fallback:slate";
   } else {
-    res.status(400).json({ error: "No source configured. Set a live input or playlist first." });
+    res.status(400).json({ error: "No source configured. Set a live input, playlist, or asset first." });
     return;
   }
 
@@ -418,6 +435,7 @@ router.post("/channels/:id/switch-source", async (req, res): Promise<void> => {
   };
   if (parsed.data.liveInputId !== undefined) updates.activeLiveInputId = parsed.data.liveInputId;
   if (parsed.data.playlistId !== undefined) updates.activePlaylistId = parsed.data.playlistId;
+  if (parsed.data.assetId !== undefined) updates.activeAssetId = parsed.data.assetId;
 
   const [channel] = await db
     .update(channelsTable)
