@@ -484,16 +484,23 @@ export class PlayoutJobRunner {
     }
 
     if ((this.job.sourceMode === "fallback" || this.job.sourceMode === "single_asset") && this.job.sourceRef) {
-      const loop = this.job.sourceMode === "single_asset" ? (this.job.loopPlaylist !== false) : true;
-      return [
+      const isStream = this.isStreamUrl(this.job.sourceRef);
+      const loop = !isStream && (this.job.sourceMode === "single_asset" ? (this.job.loopPlaylist !== false) : true);
+      const args = [
         "ffmpeg",
         "-hide_banner",
         "-loglevel", "info",
         "-stats",
         "-re",
-        ...(loop ? ["-stream_loop", "-1"] : []),
-        "-i", this.job.sourceRef,
       ];
+      if (loop) {
+        args.push("-stream_loop", "-1");
+      }
+      if (this.job.sourceRef.endsWith(".m3u8") || this.job.sourceRef.includes(".m3u8?")) {
+        args.push("-protocol_whitelist", "file,http,https,tcp,tls,crypto");
+      }
+      args.push("-i", this.job.sourceRef);
+      return args;
     }
 
     return null;
@@ -582,6 +589,29 @@ export class PlayoutJobRunner {
     }
 
     if ((this.job.sourceMode === "fallback" || this.job.sourceMode === "single_asset") && this.job.sourceRef) {
+      const isStream = this.isStreamUrl(this.job.sourceRef);
+      if (isStream) {
+        const args = [
+          "ffmpeg",
+          "-hide_banner",
+          "-loglevel", "info",
+          "-stats",
+          "-re",
+        ];
+        if (this.job.sourceRef.endsWith(".m3u8") || this.job.sourceRef.includes(".m3u8?")) {
+          args.push("-protocol_whitelist", "file,http,https,tcp,tls,crypto");
+        }
+        args.push("-i", this.job.sourceRef, "-c:v", "copy", "-c:a", "copy");
+        for (const dest of destinations) {
+          if (dest.platform === "srt") {
+            args.push("-f", "mpegts", dest.streamUrl);
+          } else {
+            const rtmpUrl = `${dest.streamUrl}/${dest.streamKey}`.replace(/\/+$/, "");
+            args.push("-f", "flv", rtmpUrl);
+          }
+        }
+        return args;
+      }
       return buildFileLoopCommand({
         inputFile: this.job.sourceRef,
         destinations,

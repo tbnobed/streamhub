@@ -75,7 +75,8 @@ export function buildFileLoopCommand(opts: FilePlayoutOptions): string[] {
   const cmd = [
     "ffmpeg",
     "-hide_banner",
-    "-loglevel", "warning",
+    "-loglevel", "info",
+    "-stats",
     "-re",
     ...(loop ? ["-stream_loop", "-1"] : []),
     "-i", opts.inputFile,
