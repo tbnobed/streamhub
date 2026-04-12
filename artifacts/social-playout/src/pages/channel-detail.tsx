@@ -179,10 +179,16 @@ function ChannelOutputPreview({ channelId, isLive }: { channelId: string; isLive
 
       if (Hls.isSupported()) {
         const hls = new Hls({
-          liveSyncDurationCount: 3,
-          liveMaxLatencyDurationCount: 6,
+          liveSyncDurationCount: 2,
+          liveMaxLatencyDurationCount: 4,
           enableWorker: true,
           lowLatencyMode: true,
+          manifestLoadingTimeOut: 3000,
+          manifestLoadingMaxRetry: 20,
+          manifestLoadingRetryDelay: 1000,
+          levelLoadingTimeOut: 3000,
+          levelLoadingMaxRetry: 20,
+          levelLoadingRetryDelay: 1000,
         });
 
         hls.loadSource(hlsUrl);
@@ -196,8 +202,8 @@ function ChannelOutputPreview({ channelId, isLive }: { channelId: string; isLive
         hls.on(Hls.Events.ERROR, (_event, data) => {
           if (data.fatal) {
             if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
-              if (retryCount < 10) {
-                setTimeout(() => setRetryCount((c) => c + 1), 3000);
+              if (retryCount < 20) {
+                setTimeout(() => setRetryCount((c) => c + 1), 1000);
               } else {
                 setError("Preview stream not yet available");
               }
@@ -215,7 +221,7 @@ function ChannelOutputPreview({ channelId, isLive }: { channelId: string; isLive
       } else {
         setError("HLS not supported in this browser");
       }
-    }, retryCount === 0 ? 5000 : 1000);
+    }, retryCount === 0 ? 1000 : 500);
 
     return () => {
       clearTimeout(retryDelay);
