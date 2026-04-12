@@ -100,6 +100,17 @@ export class WorkerAgent {
             errorMessage: String(err),
           });
         });
+      } else if (job.destinationCommands) {
+        const runner = this.activeJobs.get(job.id)!;
+        for (const [destId, cmd] of Object.entries(job.destinationCommands)) {
+          logger.info({ jobId: job.id, destId, action: cmd.action }, "Processing destination command");
+          if (cmd.action === "stop") {
+            runner.stopDestination(destId);
+          } else if (cmd.action === "restart") {
+            runner.restartDestination(destId);
+          }
+          this.api.clearDestinationCommand(job.id, destId).catch(() => {});
+        }
       }
     }
   }

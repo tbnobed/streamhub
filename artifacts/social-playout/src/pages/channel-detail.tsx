@@ -52,6 +52,7 @@ interface ActiveJob {
   bitrate: number | null;
   fps: number | null;
   destinationHealth: Record<string, DestinationHealthEntry> | null;
+  errorMessage?: string;
 }
 
 interface Channel {
@@ -505,6 +506,18 @@ export default function ChannelDetailPage() {
     onError: (e: Error) => toast({ variant: "destructive", title: "Error", description: e.message }),
   });
 
+  const destStopMutation = useMutation({
+    mutationFn: (destId: number) => apiFetch(`/channels/${channelId}/destinations/${destId}/stop`, { method: "POST" }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["channel", channelId] }); toast({ title: "Destination stopping" }); },
+    onError: (e: Error) => toast({ variant: "destructive", title: "Error", description: e.message }),
+  });
+
+  const destRestartMutation = useMutation({
+    mutationFn: (destId: number) => apiFetch(`/channels/${channelId}/destinations/${destId}/restart`, { method: "POST" }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["channel", channelId] }); toast({ title: "Destination restarting" }); },
+    onError: (e: Error) => toast({ variant: "destructive", title: "Error", description: e.message }),
+  });
+
   const switchMutation = useMutation({
     mutationFn: (body: { sourceMode: string; playlistId?: number; liveInputId?: number }) =>
       apiFetch(`/channels/${channelId}/switch-source`, {
@@ -724,6 +737,7 @@ export default function ChannelDetailPage() {
                               twitch: "⬡",
                               custom_rtmp: "◉",
                             };
+                            const isStopped = health?.error === "Manually stopped";
                             return (
                               <div key={d.id} className="flex items-center justify-between rounded-md bg-accent/20 px-3 py-2">
                                 <div className="flex items-center gap-2">
@@ -739,6 +753,30 @@ export default function ChannelDetailPage() {
                                     <span className={`w-1.5 h-1.5 rounded-full ${isError ? "bg-red-400" : isConnected ? "bg-green-400 animate-pulse" : "bg-yellow-400"}`} />
                                     {statusLabel}
                                   </span>
+                                  {isConnected && (
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      className="h-6 w-6"
+                                      title="Stop this destination"
+                                      disabled={destStopMutation.isPending}
+                                      onClick={() => destStopMutation.mutate(d.id)}
+                                    >
+                                      <Square className="w-3 h-3 text-muted-foreground" />
+                                    </Button>
+                                  )}
+                                  {(isError || isStopped) && (
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      className="h-6 w-6"
+                                      title="Restart this destination"
+                                      disabled={destRestartMutation.isPending}
+                                      onClick={() => destRestartMutation.mutate(d.id)}
+                                    >
+                                      <RefreshCw className="w-3 h-3 text-muted-foreground" />
+                                    </Button>
+                                  )}
                                 </div>
                               </div>
                             );

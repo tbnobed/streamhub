@@ -23,7 +23,7 @@ Port 80 (proxy)
 - Asset library (register video/image/audio files)
 - Playlist builder with drag-and-drop ordering
 - Live RTMP/SRT ingest endpoints with stream key generation
-- Multi-destination restreaming (YouTube, Facebook, Twitch, custom RTMP)
+- Multi-destination restreaming (YouTube, Facebook, Twitch, custom RTMP) with per-destination stop/restart controls
 - YouTube Live integration (OAuth + broadcast scheduling)
 - Stream health monitoring (bitrate, FPS, uptime)
 - SRS ingest server health monitoring (version, uptime, active streams, bitrate, clients)
@@ -65,6 +65,8 @@ All routes under `/api`:
 - `GET/PATCH/DELETE /api/channels/:id` — Channel CRUD
 - `POST /api/channels/:id/start` — Start channel
 - `POST /api/channels/:id/stop` — Stop channel
+- `POST /api/channels/:id/destinations/:destId/stop` — Stop individual destination output
+- `POST /api/channels/:id/destinations/:destId/restart` — Restart individual destination output
 - `POST /api/channels/:id/switch-source` — Hot-switch source
 - `GET /api/channels/:id/preview/:file` — HLS preview files (stream.m3u8 + segments)
 - `GET/POST /api/assets` — Asset library

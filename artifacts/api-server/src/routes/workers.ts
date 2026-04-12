@@ -158,6 +158,30 @@ router.post("/workers/jobs/:id/status", async (req, res): Promise<void> => {
   res.json({ ok: true });
 });
 
+router.post("/workers/jobs/:id/dest-command-ack", async (req, res): Promise<void> => {
+  const jobId = Number(req.params.id);
+  const { destId } = req.body as { destId?: string };
+  if (!jobId || !destId) {
+    res.status(400).json({ error: "Missing jobId or destId" });
+    return;
+  }
+
+  const [job] = await db.select().from(playoutJobsTable).where(eq(playoutJobsTable.id, jobId));
+  if (!job) {
+    res.status(404).json({ error: "Job not found" });
+    return;
+  }
+
+  const cmds = (job.destinationCommands as Record<string, unknown>) ?? {};
+  delete cmds[destId];
+
+  await db.update(playoutJobsTable)
+    .set({ destinationCommands: Object.keys(cmds).length > 0 ? cmds : null })
+    .where(eq(playoutJobsTable.id, jobId));
+
+  res.json({ ok: true });
+});
+
 router.post("/workers/events", async (req, res): Promise<void> => {
   const parsed = SubmitWorkerEventBody.safeParse(req.body);
   if (!parsed.success) {

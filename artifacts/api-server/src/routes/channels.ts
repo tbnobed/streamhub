@@ -450,6 +450,90 @@ router.post("/channels/:id/stop", async (req, res): Promise<void> => {
   res.json(updated);
 });
 
+router.post("/channels/:id/destinations/:destId/stop", async (req, res): Promise<void> => {
+  const channelId = Number(req.params.id);
+  const destId = req.params.destId;
+  if (!channelId || !destId) {
+    res.status(400).json({ error: "Invalid channel or destination ID" });
+    return;
+  }
+
+  const [channel] = await db.select().from(channelsTable).where(eq(channelsTable.id, channelId));
+  if (!channel) {
+    res.status(404).json({ error: "Channel not found" });
+    return;
+  }
+
+  if (!channel.activeJobId) {
+    res.status(400).json({ error: "No active job" });
+    return;
+  }
+
+  const [job] = await db.select().from(playoutJobsTable).where(eq(playoutJobsTable.id, channel.activeJobId));
+  if (!job) {
+    res.status(404).json({ error: "Active job not found" });
+    return;
+  }
+
+  const cmds = (job.destinationCommands as Record<string, { action: string }>) ?? {};
+  cmds[destId] = { action: "stop" };
+
+  await db.update(playoutJobsTable)
+    .set({ destinationCommands: cmds })
+    .where(eq(playoutJobsTable.id, job.id));
+
+  await db.insert(auditLogsTable).values({
+    action: "destination_stopped",
+    resourceType: "channel",
+    resourceId: channelId,
+    details: { channelName: channel.name, destId, jobId: job.id },
+  });
+
+  res.json({ ok: true, destId, action: "stop" });
+});
+
+router.post("/channels/:id/destinations/:destId/restart", async (req, res): Promise<void> => {
+  const channelId = Number(req.params.id);
+  const destId = req.params.destId;
+  if (!channelId || !destId) {
+    res.status(400).json({ error: "Invalid channel or destination ID" });
+    return;
+  }
+
+  const [channel] = await db.select().from(channelsTable).where(eq(channelsTable.id, channelId));
+  if (!channel) {
+    res.status(404).json({ error: "Channel not found" });
+    return;
+  }
+
+  if (!channel.activeJobId) {
+    res.status(400).json({ error: "No active job" });
+    return;
+  }
+
+  const [job] = await db.select().from(playoutJobsTable).where(eq(playoutJobsTable.id, channel.activeJobId));
+  if (!job) {
+    res.status(404).json({ error: "Active job not found" });
+    return;
+  }
+
+  const cmds = (job.destinationCommands as Record<string, { action: string }>) ?? {};
+  cmds[destId] = { action: "restart" };
+
+  await db.update(playoutJobsTable)
+    .set({ destinationCommands: cmds })
+    .where(eq(playoutJobsTable.id, job.id));
+
+  await db.insert(auditLogsTable).values({
+    action: "destination_restarted",
+    resourceType: "channel",
+    resourceId: channelId,
+    details: { channelName: channel.name, destId, jobId: job.id },
+  });
+
+  res.json({ ok: true, destId, action: "restart" });
+});
+
 router.post("/channels/:id/switch-source", async (req, res): Promise<void> => {
   const params = SwitchChannelSourceParams.safeParse({ id: Number(req.params.id) });
   if (!params.success) {

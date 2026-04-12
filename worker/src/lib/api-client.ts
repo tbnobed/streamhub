@@ -11,6 +11,7 @@ export interface PlayoutJob {
   ffmpegCommand: string | null;
   pid: number | null;
   loopPlaylist?: boolean;
+  destinationCommands?: Record<string, { action: string }> | null;
 }
 
 export class ApiClient {
@@ -61,6 +62,13 @@ export class ApiClient {
     await this.fetch(`/workers/jobs/${jobId}/status`, {
       method: "POST",
       body: JSON.stringify({ status, ...extra }),
+    });
+  }
+
+  async clearDestinationCommand(jobId: number, destId: string): Promise<void> {
+    await this.fetch(`/workers/jobs/${jobId}/dest-command-ack`, {
+      method: "POST",
+      body: JSON.stringify({ destId }),
     });
   }
 

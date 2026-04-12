@@ -647,6 +647,83 @@ export class PlayoutJobRunner {
     return null;
   }
 
+  stopDestination(destId: string): void {
+    const dp = this.destProcesses.get(destId);
+    if (!dp && this.singleProcess) {
+      logger.info({ jobId: this.job.id, destId }, "Single-process mode: stopping entire stream for destination stop");
+      this.stop();
+      return;
+    }
+    if (!dp) {
+      logger.warn({ jobId: this.job.id, destId }, "Destination not found for stop");
+      return;
+    }
+
+    dp.restartCount = this.maxRestarts;
+    dp.error = "Manually stopped";
+    dp.healthy = false;
+
+    if (dp.process && !dp.process.killed) {
+      logger.info({ jobId: this.job.id, destId, pid: dp.process.pid }, "Stopping destination FFmpeg");
+      dp.process.kill("SIGTERM");
+      setTimeout(() => {
+        if (dp.process && !dp.process.killed) {
+          dp.process.kill("SIGKILL");
+        }
+      }, 5000);
+    }
+
+    this.reportCombinedStats();
+  }
+
+  restartDestination(destId: string): void {
+    if (this.singleProcess && this.destProcesses.size === 0) {
+      logger.info({ jobId: this.job.id, destId }, "Single-process mode: restarting entire stream");
+      this.restartCount = 0;
+      this.stopped = false;
+      if (this.singleProcess && !this.singleProcess.killed) {
+        this.singleProcess.kill("SIGTERM");
+      }
+      return;
+    }
+
+    const dp = this.destProcesses.get(destId);
+    const destinations = this.job.destinations ?? [];
+    const destIndex = destinations.findIndex((d) => String((d as Record<string, unknown>).id ?? d.streamKey) === destId);
+    const dest = destIndex >= 0 ? destinations[destIndex] : null;
+
+    if (!dest) {
+      logger.warn({ jobId: this.job.id, destId }, "Destination config not found for restart");
+      return;
+    }
+
+    if (dp) {
+      dp.restartCount = 0;
+      dp.error = undefined;
+
+      if (dp.process && !dp.process.killed) {
+        logger.info({ jobId: this.job.id, destId, pid: dp.process.pid }, "Killing destination for restart");
+        dp.process.kill("SIGTERM");
+        setTimeout(() => {
+          if (dp.process && !dp.process.killed) {
+            dp.process.kill("SIGKILL");
+          }
+        }, 5000);
+      }
+    } else {
+      const destName = (dest as Record<string, unknown>).name as string ?? dest.platform;
+      this.buildInputArgs().then((inputArgs) => {
+        if (inputArgs && !this.stopped) {
+          this.launchDestProcess(destId, destName, dest, inputArgs);
+        }
+      }).catch((err) => {
+        logger.error({ err, jobId: this.job.id, destId }, "Failed to restart destination");
+      });
+    }
+
+    this.reportCombinedStats();
+  }
+
   stop(): void {
     this.stopped = true;
 
