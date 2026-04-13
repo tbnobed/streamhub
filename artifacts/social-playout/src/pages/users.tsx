@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Spinner } from "@/components/ui/spinner";
 import { useToast } from "@/hooks/use-toast";
-import { Users, Plus, Pencil, Trash2, ShieldCheck, Eye, Radio } from "lucide-react";
+import { Users, Plus, Pencil, Trash2, ShieldCheck, Eye, Radio, Mail, Copy, UserPlus } from "lucide-react";
 import { useState } from "react";
 import { apiBase } from "@/lib/api";
 import { useAuth } from "@/context/auth";
@@ -57,6 +57,9 @@ export default function UsersPage() {
 
   const [form, setForm] = useState({ username: "", email: "", password: "", role: "operator" });
   const [editForm, setEditForm] = useState({ email: "", role: "", password: "", isActive: true });
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [inviteForm, setInviteForm] = useState({ username: "", email: "", role: "operator" });
+  const [lastTempPassword, setLastTempPassword] = useState<string | null>(null);
 
   const { data: users = [], isLoading } = useQuery<UserRecord[]>({
     queryKey: ["users"],
@@ -95,6 +98,27 @@ export default function UsersPage() {
     onError: (e: Error) => toast({ variant: "destructive", title: "Failed to delete user", description: e.message }),
   });
 
+  const inviteMut = useMutation({
+    mutationFn: (data: typeof inviteForm) =>
+      apiFetch<{ invite: any; user: any; emailSent: boolean; tempPassword?: string }>("/invites", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ["users"] });
+      if (data.tempPassword) {
+        setLastTempPassword(data.tempPassword);
+        toast({ title: "User created", description: "Email not configured — temporary password shown below." });
+      } else {
+        setLastTempPassword(null);
+        setInviteOpen(false);
+        setInviteForm({ username: "", email: "", role: "operator" });
+        toast({ title: "Invite sent", description: `Invitation email sent to ${data.invite.email}` });
+      }
+    },
+    onError: (e: Error) => toast({ variant: "destructive", title: "Failed to invite user", description: e.message }),
+  });
+
   const openEdit = (u: UserRecord) => {
     setEditUser(u);
     setEditForm({ email: u.email, role: u.role, password: "", isActive: u.isActive });
@@ -130,9 +154,14 @@ export default function UsersPage() {
             <p className="text-muted-foreground text-sm mt-1">{users.length} user{users.length !== 1 ? "s" : ""}</p>
           </div>
           {isAdmin && (
-            <Button onClick={() => setCreateOpen(true)}>
-              <Plus className="w-4 h-4 mr-2" /> New User
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => { setInviteOpen(true); setLastTempPassword(null); }}>
+                <UserPlus className="w-4 h-4 mr-2" /> Invite User
+              </Button>
+              <Button onClick={() => setCreateOpen(true)}>
+                <Plus className="w-4 h-4 mr-2" /> New User
+              </Button>
+            </div>
           )}
         </div>
 
@@ -287,6 +316,91 @@ export default function UsersPage() {
               {deleteMut.isPending ? "Deleting…" : "Delete User"}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={inviteOpen} onOpenChange={(open) => { if (!open) { setInviteOpen(false); setLastTempPassword(null); } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Mail className="w-5 h-5" /> Invite User
+            </DialogTitle>
+            <DialogDescription>
+              Create a user account and send an invitation email with login credentials.
+              If email is not configured, a temporary password will be shown instead.
+            </DialogDescription>
+          </DialogHeader>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!inviteForm.username || !inviteForm.email) return;
+              inviteMut.mutate(inviteForm);
+            }}
+            className="space-y-4"
+          >
+            <div className="space-y-2">
+              <Label>Username</Label>
+              <Input
+                value={inviteForm.username}
+                onChange={(e) => setInviteForm({ ...inviteForm, username: e.target.value })}
+                placeholder="johndoe"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Email</Label>
+              <Input
+                type="email"
+                value={inviteForm.email}
+                onChange={(e) => setInviteForm({ ...inviteForm, email: e.target.value })}
+                placeholder="john@example.com"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Role</Label>
+              <Select value={inviteForm.role} onValueChange={(v) => setInviteForm({ ...inviteForm, role: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="admin">Admin</SelectItem>
+                  <SelectItem value="operator">Operator</SelectItem>
+                  <SelectItem value="viewer">Viewer</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {lastTempPassword && (
+              <div className="p-3 rounded-md bg-yellow-500/10 border border-yellow-500/30">
+                <p className="text-sm text-yellow-400 mb-1 font-medium">Temporary Password (share securely)</p>
+                <div className="flex items-center gap-2">
+                  <code className="text-sm font-mono bg-background/50 px-2 py-1 rounded">{lastTempPassword}</code>
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    className="h-7 w-7"
+                    onClick={() => {
+                      navigator.clipboard.writeText(lastTempPassword);
+                      toast({ title: "Copied to clipboard" });
+                    }}
+                  >
+                    <Copy className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => { setInviteOpen(false); setLastTempPassword(null); }}>
+                {lastTempPassword ? "Done" : "Cancel"}
+              </Button>
+              {!lastTempPassword && (
+                <Button type="submit" disabled={inviteMut.isPending}>
+                  {inviteMut.isPending ? "Sending…" : "Send Invite"}
+                </Button>
+              )}
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </AppShell>
