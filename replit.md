@@ -31,11 +31,12 @@ Port 80 (proxy)
 - Worker node management (heartbeat, job polling)
 - **Role-based access control**: Workers, Users, and Audit Logs pages are admin-only (both API and frontend protected)
 - User timezone preference (selectable from sidebar, saved per user)
+- **Email notifications**: SendGrid integration for stream start/stop/error alerts with per-user notification preferences; admin invite system creates users and optionally emails credentials
 - Audit logs
 
 ## Database
 - PostgreSQL via `lib/db` (Drizzle ORM)
-- Key tables: users, channels, assets, playlists, playlist_items, live_inputs, destinations, youtube_accounts, youtube_broadcasts, worker_nodes, playout_jobs, worker_events, audit_logs, stream_sessions
+- Key tables: users, channels, assets, playlists, playlist_items, live_inputs, destinations, youtube_accounts, youtube_broadcasts, worker_nodes, playout_jobs, worker_events, audit_logs, stream_sessions, notification_prefs, invites
 
 ## Auth
 - Token-based (in-memory Map, Bearer token in localStorage)
@@ -55,6 +56,7 @@ Port 80 (proxy)
 - `/destinations` — Output destinations
 - `/youtube` — YouTube OAuth + broadcast scheduling
 - `/workers` — Worker node status + events
+- `/notifications` — Email notification preferences + user invites (admin)
 - `/logs` — Audit log viewer
 
 ## API Routes
@@ -84,6 +86,10 @@ All routes under `/api`:
 - `GET /api/srs/streams` — Active SRS streams
 - `GET /api/srs/clients` — Connected SRS clients
 - `GET /api/srs/input-status` — SRS status matched to live inputs
+- `GET /api/email/status` — Email configuration status
+- `GET/PUT /api/notifications/preferences` — User notification preferences
+- `GET/POST /api/invites` — List/create user invites (admin)
+- `DELETE /api/invites/:id` — Delete invite (admin)
 - `GET /api/logs/audit` — Audit logs
 
 ## Worker Service
@@ -126,6 +132,9 @@ sudo bash deploy/update.sh          # redeploy after code changes
 - `PORT` — API server port (8080 in dev)
 - `WORKER_ID` — Unique worker identifier
 - `API_URL` — Worker → API URL
+- `SENDGRID_API_KEY` — SendGrid API key (optional, for email notifications)
+- `SENDGRID_FROM_EMAIL` — Sender email address for notifications
+- `APP_URL` — Application URL (used in invite emails for login link)
 
 ## Tech Stack
 - **Frontend**: React 18, Vite, Tailwind CSS, shadcn/ui (Radix UI), TanStack Query, Wouter, Lucide

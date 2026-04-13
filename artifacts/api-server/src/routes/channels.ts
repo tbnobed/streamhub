@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { db } from "@workspace/db";
 import { LocalStorageService } from "../lib/objectStorage";
+import { notifyStreamStarted, notifyStreamStopped } from "../lib/notifyUsers";
 import {
   channelsTable,
   playlistsTable,
@@ -384,6 +385,8 @@ router.post("/channels/:id/start", async (req, res): Promise<void> => {
 
   const safeDestConfigs = destConfigs.map(({ streamKey, ...rest }) => rest);
 
+  notifyStreamStarted(channel.name, activeDests.map((d) => d.name)).catch(() => {});
+
   res.json({
     ...updated,
     job: {
@@ -446,6 +449,10 @@ router.post("/channels/:id/stop", async (req, res): Promise<void> => {
     resourceId: channel.id,
     details: { channelName: channel.name, jobsStopped: runningJobs.length + pendingJobs.length },
   });
+
+  if (channel.status === "on_air") {
+    notifyStreamStopped(channel.name).catch(() => {});
+  }
 
   res.json(updated);
 });

@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { workerNodesTable, playoutJobsTable, workerEventsTable, channelsTable } from "@workspace/db";
 import { eq, and, isNull } from "drizzle-orm";
+import { notifyStreamError } from "../lib/notifyUsers";
 import {
   WorkerHeartbeatBody,
   FetchWorkerJobsQueryParams,
@@ -158,6 +159,13 @@ router.post("/workers/jobs/:id/status", async (req, res): Promise<void> => {
           eq(channelsTable.activeJobId, existingJob.id),
         )
       );
+
+    if (parsed.data.status === "failed" && existingJob.status !== "failed") {
+      const [ch] = await db.select({ name: channelsTable.name }).from(channelsTable).where(eq(channelsTable.id, existingJob.channelId));
+      if (ch) {
+        notifyStreamError(ch.name, parsed.data.errorMessage || "Stream failed").catch(() => {});
+      }
+    }
   }
 
   res.json({ ok: true });

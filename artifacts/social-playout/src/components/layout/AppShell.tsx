@@ -15,6 +15,7 @@ import {
   X,
   Users,
   Globe,
+  Bell,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -27,6 +28,7 @@ const NAV_ITEMS = [
   { href: "/playlists", label: "Playlists", icon: ListVideo, adminOnly: false },
   { href: "/live-inputs", label: "Live Inputs", icon: Radio, adminOnly: false },
   { href: "/destinations", label: "Destinations", icon: Share2, adminOnly: false },
+  { href: "/notifications", label: "Notifications", icon: Bell, adminOnly: false },
   { href: "/workers", label: "Workers", icon: ServerCog, adminOnly: true },
   { href: "/users", label: "Users", icon: Users, adminOnly: true },
   { href: "/logs", label: "Audit Logs", icon: ScrollText, adminOnly: true },

@@ -20,6 +20,7 @@ import YouTubePage from "@/pages/youtube";
 import WorkersPage from "@/pages/workers";
 import LogsPage from "@/pages/logs";
 import UsersPage from "@/pages/users";
+import InvitesPage from "@/pages/invites";
 import NotFound from "@/pages/not-found";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -79,6 +80,9 @@ function Router() {
       </Route>
       <Route path="/users">
         {() => <AdminRoute><UsersPage /></AdminRoute>}
+      </Route>
+      <Route path="/notifications">
+        {() => <ProtectedRoute><InvitesPage /></ProtectedRoute>}
       </Route>
       <Route component={NotFound} />
     </Switch>

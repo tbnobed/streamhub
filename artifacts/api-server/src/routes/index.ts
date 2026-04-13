@@ -13,6 +13,7 @@ import monitoringRouter from "./monitoring";
 import logsRouter from "./logs";
 import srsRouter from "./srs";
 import storageRouter from "./storage";
+import notificationsRouter from "./notifications";
 
 const router: IRouter = Router();
 
@@ -30,5 +31,6 @@ router.use(workersRouter);
 router.use(monitoringRouter);
 router.use(logsRouter);
 router.use(srsRouter);
+router.use(notificationsRouter);
 
 export default router;
