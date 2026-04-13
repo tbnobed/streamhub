@@ -19,6 +19,7 @@ export const invitesTable = pgTable("invites", {
   token: text("token").notNull().unique(),
   invitedBy: integer("invited_by").references(() => usersTable.id),
   accepted: boolean("accepted").notNull().default(false),
+  tenantId: integer("tenant_id"),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

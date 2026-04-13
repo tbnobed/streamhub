@@ -10,6 +10,7 @@ export const auditLogsTable = pgTable("audit_logs", {
   resourceType: text("resource_type").notNull(),
   resourceId: integer("resource_id"),
   details: jsonb("details"),
+  tenantId: integer("tenant_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -23,6 +24,7 @@ export const streamSessionsTable = pgTable("stream_sessions", {
   peakBitrate: integer("peak_bitrate"),
   errorCount: integer("error_count").notNull().default(0),
   sourceMode: text("source_mode").notNull().default("playlist"),
+  tenantId: integer("tenant_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

@@ -8,6 +8,7 @@ export const playlistsTable = pgTable("playlists", {
   description: text("description"),
   channelId: integer("channel_id"),
   loop: boolean("loop").notNull().default(true),
+  tenantId: integer("tenant_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

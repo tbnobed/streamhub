@@ -15,6 +15,7 @@ export const channelsTable = pgTable("channels", {
   fallbackAssetId: integer("fallback_asset_id"),
   loopPlaylist: boolean("loop_playlist").notNull().default(true),
   userId: integer("user_id"),
+  tenantId: integer("tenant_id"),
   scheduleEnabled: boolean("schedule_enabled").notNull().default(false),
   scheduleTimezone: text("schedule_timezone").notNull().default("UTC"),
   scheduleStartTime: text("schedule_start_time"),

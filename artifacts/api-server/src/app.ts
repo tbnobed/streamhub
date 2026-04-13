@@ -34,6 +34,15 @@ app.use(cookieParser());
 
 app.use("/api", router);
 
+app.use((err: any, _req: any, res: any, _next: any) => {
+  if (err.statusCode) {
+    res.status(err.statusCode).json({ error: err.message });
+  } else {
+    logger.error({ err }, "Unhandled error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 seedIfEmpty().catch((err) => logger.error({ err }, "Seed failed"));
 
 export default app;

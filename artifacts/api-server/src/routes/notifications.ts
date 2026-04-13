@@ -1,8 +1,8 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { notificationPrefsTable, invitesTable, usersTable, auditLogsTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
-import { requireAuth, requireAdmin } from "../lib/authMiddleware";
+import { eq, and } from "drizzle-orm";
+import { requireAuth, requireAdmin, getTenantId } from "../lib/authMiddleware";
 import { hashPassword } from "./auth";
 import { sendInviteEmail, isEmailConfigured } from "../lib/email";
 import { randomBytes } from "crypto";
@@ -60,7 +60,8 @@ router.put("/notifications/preferences", requireAuth, async (req, res): Promise<
   }
 });
 
-router.get("/invites", requireAuth, requireAdmin, async (_req, res): Promise<void> => {
+router.get("/invites", requireAuth, requireAdmin, async (req, res): Promise<void> => {
+  const tenantId = getTenantId(req);
   const invites = await db
     .select({
       id: invitesTable.id,
@@ -72,6 +73,7 @@ router.get("/invites", requireAuth, requireAdmin, async (_req, res): Promise<voi
       invitedBy: invitesTable.invitedBy,
     })
     .from(invitesTable)
+    .where(eq(invitesTable.tenantId, tenantId))
     .orderBy(invitesTable.createdAt);
 
   res.json(invites);
@@ -83,6 +85,7 @@ function getSetupUrl(token: string): string {
 }
 
 router.post("/invites", requireAuth, requireAdmin, async (req, res): Promise<void> => {
+  const tenantId = getTenantId(req);
   const { email, role } = req.body;
   const inviter = (req as any).user;
 
@@ -107,6 +110,7 @@ router.post("/invites", requireAuth, requireAdmin, async (req, res): Promise<voi
       token,
       invitedBy: inviter.id,
       expiresAt,
+      tenantId,
     })
     .returning();
 
@@ -123,6 +127,7 @@ router.post("/invites", requireAuth, requireAdmin, async (req, res): Promise<voi
     resourceType: "invite",
     resourceId: invite.id,
     userId: inviter.id,
+    tenantId,
     details: { email, role: role || "operator", emailSent },
   });
 
@@ -130,13 +135,14 @@ router.post("/invites", requireAuth, requireAdmin, async (req, res): Promise<voi
 });
 
 router.post("/invites/:id/resend", requireAuth, requireAdmin, async (req, res): Promise<void> => {
+  const tenantId = getTenantId(req);
   const id = Number(req.params.id);
   if (!id) {
     res.status(400).json({ error: "Invalid invite ID" });
     return;
   }
 
-  const [invite] = await db.select().from(invitesTable).where(eq(invitesTable.id, id));
+  const [invite] = await db.select().from(invitesTable).where(and(eq(invitesTable.id, id), eq(invitesTable.tenantId, tenantId)));
   if (!invite) {
     res.status(404).json({ error: "Invite not found" });
     return;
@@ -167,13 +173,14 @@ router.post("/invites/:id/resend", requireAuth, requireAdmin, async (req, res): 
 });
 
 router.delete("/invites/:id", requireAuth, requireAdmin, async (req, res): Promise<void> => {
+  const tenantId = getTenantId(req);
   const id = Number(req.params.id);
   if (!id) {
     res.status(400).json({ error: "Invalid invite ID" });
     return;
   }
 
-  const [deleted] = await db.delete(invitesTable).where(eq(invitesTable.id, id)).returning();
+  const [deleted] = await db.delete(invitesTable).where(and(eq(invitesTable.id, id), eq(invitesTable.tenantId, tenantId))).returning();
   if (!deleted) {
     res.status(404).json({ error: "Invite not found" });
     return;
@@ -256,6 +263,7 @@ router.post("/invites/setup-account", async (req, res): Promise<void> => {
       email: invite.email,
       passwordHash: hashPassword(password),
       role: invite.role || "operator",
+      tenantId: invite.tenantId,
     })
     .returning({
       id: usersTable.id,
@@ -272,6 +280,7 @@ router.post("/invites/setup-account", async (req, res): Promise<void> => {
     action: "invite_accepted",
     resourceType: "user",
     resourceId: user.id,
+    tenantId: invite.tenantId,
     details: { email: invite.email, role: invite.role },
   });
 

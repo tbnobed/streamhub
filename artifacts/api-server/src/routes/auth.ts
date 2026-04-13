@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { usersTable, sessionsTable } from "@workspace/db";
+import { usersTable, sessionsTable, tenantsTable } from "@workspace/db";
 import { eq, and, gt } from "drizzle-orm";
 import { LoginBody } from "@workspace/api-zod";
 import crypto from "node:crypto";
@@ -47,6 +47,16 @@ router.post("/auth/login", async (req, res): Promise<void> => {
 
   await db.insert(sessionsTable).values({ token, userId: user.id, expiresAt });
 
+  let tenantName: string | null = null;
+  let tenantSlug: string | null = null;
+  if (user.tenantId) {
+    const [tenant] = await db.select().from(tenantsTable).where(eq(tenantsTable.id, user.tenantId));
+    if (tenant) {
+      tenantName = tenant.name;
+      tenantSlug = tenant.slug;
+    }
+  }
+
   res.json({
     user: {
       id: user.id,
@@ -55,6 +65,9 @@ router.post("/auth/login", async (req, res): Promise<void> => {
       role: user.role,
       isActive: user.isActive,
       timezone: user.timezone,
+      tenantId: user.tenantId,
+      tenantName,
+      tenantSlug,
       createdAt: user.createdAt,
     },
     token,
@@ -85,6 +98,16 @@ router.patch("/auth/me", async (req, res): Promise<void> => {
     return;
   }
 
+  let tenantName: string | null = null;
+  let tenantSlug: string | null = null;
+  if (user.tenantId) {
+    const [tenant] = await db.select().from(tenantsTable).where(eq(tenantsTable.id, user.tenantId));
+    if (tenant) {
+      tenantName = tenant.name;
+      tenantSlug = tenant.slug;
+    }
+  }
+
   res.json({
     id: user.id,
     username: user.username,
@@ -92,6 +115,9 @@ router.patch("/auth/me", async (req, res): Promise<void> => {
     role: user.role,
     isActive: user.isActive,
     timezone: user.timezone,
+    tenantId: user.tenantId,
+    tenantName,
+    tenantSlug,
     createdAt: user.createdAt,
   });
 });
@@ -125,6 +151,16 @@ router.get("/auth/me", async (req, res): Promise<void> => {
     return;
   }
 
+  let tenantName: string | null = null;
+  let tenantSlug: string | null = null;
+  if (user.tenantId) {
+    const [tenant] = await db.select().from(tenantsTable).where(eq(tenantsTable.id, user.tenantId));
+    if (tenant) {
+      tenantName = tenant.name;
+      tenantSlug = tenant.slug;
+    }
+  }
+
   res.json({
     id: user.id,
     username: user.username,
@@ -132,6 +168,9 @@ router.get("/auth/me", async (req, res): Promise<void> => {
     role: user.role,
     isActive: user.isActive,
     timezone: user.timezone,
+    tenantId: user.tenantId,
+    tenantName,
+    tenantSlug,
     createdAt: user.createdAt,
   });
 });

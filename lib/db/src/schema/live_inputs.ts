@@ -14,6 +14,7 @@ export const liveInputsTable = pgTable("live_inputs", {
   currentBitrate: integer("current_bitrate"),
   currentResolution: text("current_resolution"),
   reconnectCount: integer("reconnect_count").notNull().default(0),
+  tenantId: integer("tenant_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

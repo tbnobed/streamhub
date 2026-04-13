@@ -34,9 +34,20 @@ Port 80 (proxy)
 - **Email notifications**: SendGrid integration for stream start/stop/error alerts with per-user notification preferences; admin invite system creates users and optionally emails credentials
 - Audit logs
 
+## Multi-Tenancy
+- **Tenant isolation**: All resource tables (users, channels, assets, playlists, live_inputs, destinations, youtube_accounts, youtube_broadcasts, invites, audit_logs, stream_sessions) include a `tenantId` column
+- **Shared infrastructure**: Worker nodes, playout jobs, worker events, sessions, and playlist items are NOT tenant-scoped
+- Default tenant: name="Default", slug="default", ID=1
+- `getTenantId(req)` helper extracts tenant context from authenticated user
+- Global `requireAuth` middleware applied before all tenant-scoped routes
+- Public routes (auth, invites/verify, invites/setup-account, health, storage, workers, SRS) are placed before the global auth middleware
+- Invited users inherit the inviter's tenant
+- Login/me responses include `tenantId`, `tenantName`, `tenantSlug`
+- Admin-only tenant settings page at `/settings` (GET/PATCH `/api/tenants/current`)
+
 ## Database
 - PostgreSQL via `lib/db` (Drizzle ORM)
-- Key tables: users, channels, assets, playlists, playlist_items, live_inputs, destinations, youtube_accounts, youtube_broadcasts, worker_nodes, playout_jobs, worker_events, audit_logs, stream_sessions, notification_prefs, invites
+- Key tables: tenants, users, channels, assets, playlists, playlist_items, live_inputs, destinations, youtube_accounts, youtube_broadcasts, worker_nodes, playout_jobs, worker_events, audit_logs, stream_sessions, notification_prefs, invites
 
 ## Auth
 - Token-based (in-memory Map, Bearer token in localStorage)
@@ -58,6 +69,7 @@ Port 80 (proxy)
 - `/workers` — Worker node status + events
 - `/notifications` — Email notification preferences + user invites (admin)
 - `/logs` — Audit log viewer
+- `/settings` — Tenant settings (admin only)
 
 ## API Routes
 All routes under `/api`:
@@ -91,6 +103,8 @@ All routes under `/api`:
 - `GET/POST /api/invites` — List/create user invites (admin)
 - `DELETE /api/invites/:id` — Delete invite (admin)
 - `GET /api/logs/audit` — Audit logs
+- `GET /api/tenants/current` — Current tenant info
+- `PATCH /api/tenants/current` — Update tenant settings (admin)
 
 ## Worker Service
 Located in `worker/`. Runs FFmpeg jobs assigned by the API.

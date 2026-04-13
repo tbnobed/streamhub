@@ -13,6 +13,7 @@ export const destinationsTable = pgTable("destinations", {
   youtubeAccountId: integer("youtube_account_id"),
   youtubeBroadcastId: integer("youtube_broadcast_id"),
   status: text("status").notNull().default("idle"),
+  tenantId: integer("tenant_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

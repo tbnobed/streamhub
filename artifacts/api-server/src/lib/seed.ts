@@ -5,6 +5,7 @@ import {
   liveInputsTable,
   destinationsTable,
   auditLogsTable,
+  tenantsTable,
 } from "@workspace/db";
 import crypto from "node:crypto";
 import { logger } from "./logger";
@@ -19,12 +20,25 @@ export async function seedIfEmpty(): Promise<void> {
 
   logger.info("Seeding initial data...");
 
+  const existingTenants = await db.select().from(tenantsTable);
+  let tenantId: number;
+  if (existingTenants.length === 0) {
+    const [tenant] = await db.insert(tenantsTable).values({
+      name: "Default",
+      slug: "default",
+    }).returning();
+    tenantId = tenant!.id;
+  } else {
+    tenantId = existingTenants[0]!.id;
+  }
+
   const [admin] = await db.insert(usersTable).values({
     username: "admin",
     email: "admin@playout.local",
     passwordHash: hashPassword("admin123"),
     role: "admin",
     isActive: true,
+    tenantId,
   }).returning();
 
   await db.insert(usersTable).values({
@@ -33,6 +47,7 @@ export async function seedIfEmpty(): Promise<void> {
     passwordHash: hashPassword("operator123"),
     role: "operator",
     isActive: true,
+    tenantId,
   });
 
   const [channel] = await db.insert(channelsTable).values({
@@ -42,6 +57,7 @@ export async function seedIfEmpty(): Promise<void> {
     sourceMode: "playlist",
     loopPlaylist: true,
     userId: admin!.id,
+    tenantId,
   }).returning();
 
   const seedStreamKey = crypto.randomBytes(16).toString("hex");
@@ -54,6 +70,7 @@ export async function seedIfEmpty(): Promise<void> {
     ingestUrl: `rtmp://${ingestHost}/live/${seedStreamKey}`,
     status: "idle",
     reconnectCount: 0,
+    tenantId,
   });
 
   await db.insert(destinationsTable).values({
@@ -64,6 +81,7 @@ export async function seedIfEmpty(): Promise<void> {
     streamKey: "xxxx-xxxx-xxxx-xxxx",
     isActive: true,
     status: "idle",
+    tenantId,
   });
 
   await db.insert(auditLogsTable).values({
@@ -72,6 +90,7 @@ export async function seedIfEmpty(): Promise<void> {
     action: "system_initialized",
     resourceType: "system",
     details: { message: "Initial seed completed" },
+    tenantId,
   });
 
   logger.info("Seed complete");

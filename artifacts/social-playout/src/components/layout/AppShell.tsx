@@ -16,6 +16,7 @@ import {
   Users,
   Globe,
   Bell,
+  Settings,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -32,6 +33,7 @@ const NAV_ITEMS = [
   { href: "/workers", label: "Workers", icon: ServerCog, adminOnly: true },
   { href: "/users", label: "Users", icon: Users, adminOnly: true },
   { href: "/logs", label: "Audit Logs", icon: ScrollText, adminOnly: true },
+  { href: "/settings", label: "Tenant Settings", icon: Settings, adminOnly: true },
 ];
 
 interface AppShellProps {
@@ -81,7 +83,7 @@ export function AppShell({ children }: AppShellProps) {
         <div className="h-20 px-6 flex items-center gap-3 border-b border-border">
           <img src="/logo.png" alt="OBR" className="w-16 h-16 rounded-lg object-contain" />
           <div>
-            <div className="font-bold text-sm leading-none">Media Playout</div>
+            <div className="font-bold text-sm leading-none">{user?.tenantName || "Media Playout"}</div>
             <div className="text-xs text-muted-foreground leading-none mt-1">Operations Center</div>
           </div>
         </div>

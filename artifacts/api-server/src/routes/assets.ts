@@ -1,7 +1,8 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { assetsTable } from "@workspace/db";
-import { eq, sql } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
+import { getTenantId } from "../lib/authMiddleware";
 import {
   CreateAssetBody,
   GetAssetParams,
@@ -13,8 +14,9 @@ import {
 
 const router: IRouter = Router();
 
-router.get("/assets/stats", async (_req, res): Promise<void> => {
-  const all = await db.select().from(assetsTable);
+router.get("/assets/stats", async (req, res): Promise<void> => {
+  const tenantId = getTenantId(req);
+  const all = await db.select().from(assetsTable).where(eq(assetsTable.tenantId, tenantId));
 
   const total = all.length;
   const totalSizeBytes = all.reduce((acc, a) => acc + (a.fileSize ?? 0), 0);
@@ -32,8 +34,9 @@ router.get("/assets/stats", async (_req, res): Promise<void> => {
 });
 
 router.get("/assets", async (req, res): Promise<void> => {
+  const tenantId = getTenantId(req);
   const params = ListAssetsQueryParams.safeParse(req.query);
-  let assets = await db.select().from(assetsTable).orderBy(assetsTable.createdAt);
+  let assets = await db.select().from(assetsTable).where(eq(assetsTable.tenantId, tenantId)).orderBy(assetsTable.createdAt);
 
   if (params.success && params.data.channelId != null) {
     assets = assets.filter((a) => a.channelId === params.data.channelId);
@@ -43,6 +46,7 @@ router.get("/assets", async (req, res): Promise<void> => {
 });
 
 router.post("/assets", async (req, res): Promise<void> => {
+  const tenantId = getTenantId(req);
   const parsed = CreateAssetBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -51,20 +55,21 @@ router.post("/assets", async (req, res): Promise<void> => {
 
   const [asset] = await db
     .insert(assetsTable)
-    .values({ ...parsed.data, status: "ready" })
+    .values({ ...parsed.data, status: "ready", tenantId })
     .returning();
 
   res.status(201).json(asset);
 });
 
 router.get("/assets/:id", async (req, res): Promise<void> => {
+  const tenantId = getTenantId(req);
   const params = GetAssetParams.safeParse({ id: Number(req.params.id) });
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
     return;
   }
 
-  const [asset] = await db.select().from(assetsTable).where(eq(assetsTable.id, params.data.id));
+  const [asset] = await db.select().from(assetsTable).where(and(eq(assetsTable.id, params.data.id), eq(assetsTable.tenantId, tenantId)));
 
   if (!asset) {
     res.status(404).json({ error: "Asset not found" });
@@ -75,6 +80,7 @@ router.get("/assets/:id", async (req, res): Promise<void> => {
 });
 
 router.patch("/assets/:id", async (req, res): Promise<void> => {
+  const tenantId = getTenantId(req);
   const params = UpdateAssetParams.safeParse({ id: Number(req.params.id) });
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -95,7 +101,7 @@ router.patch("/assets/:id", async (req, res): Promise<void> => {
   const [asset] = await db
     .update(assetsTable)
     .set(updates)
-    .where(eq(assetsTable.id, params.data.id))
+    .where(and(eq(assetsTable.id, params.data.id), eq(assetsTable.tenantId, tenantId)))
     .returning();
 
   if (!asset) {
@@ -107,6 +113,7 @@ router.patch("/assets/:id", async (req, res): Promise<void> => {
 });
 
 router.delete("/assets/:id", async (req, res): Promise<void> => {
+  const tenantId = getTenantId(req);
   const params = DeleteAssetParams.safeParse({ id: Number(req.params.id) });
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -115,7 +122,7 @@ router.delete("/assets/:id", async (req, res): Promise<void> => {
 
   const [asset] = await db
     .delete(assetsTable)
-    .where(eq(assetsTable.id, params.data.id))
+    .where(and(eq(assetsTable.id, params.data.id), eq(assetsTable.tenantId, tenantId)))
     .returning();
 
   if (!asset) {

@@ -1,7 +1,8 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { playlistsTable, playlistItemsTable, assetsTable } from "@workspace/db";
-import { eq, asc, sql } from "drizzle-orm";
+import { eq, and, asc, sql } from "drizzle-orm";
+import { getTenantId } from "../lib/authMiddleware";
 import {
   CreatePlaylistBody,
   GetPlaylistParams,
@@ -39,8 +40,9 @@ async function getPlaylistWithCount(id: number) {
 }
 
 router.get("/playlists", async (req, res): Promise<void> => {
+  const tenantId = getTenantId(req);
   const params = ListPlaylistsQueryParams.safeParse(req.query);
-  let playlists = await db.select().from(playlistsTable).orderBy(playlistsTable.createdAt);
+  let playlists = await db.select().from(playlistsTable).where(eq(playlistsTable.tenantId, tenantId)).orderBy(playlistsTable.createdAt);
 
   if (params.success && params.data.channelId != null) {
     playlists = playlists.filter((p) => p.channelId === params.data.channelId);
@@ -60,6 +62,7 @@ router.get("/playlists", async (req, res): Promise<void> => {
 });
 
 router.post("/playlists", async (req, res): Promise<void> => {
+  const tenantId = getTenantId(req);
   const parsed = CreatePlaylistBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -68,24 +71,27 @@ router.post("/playlists", async (req, res): Promise<void> => {
 
   const [playlist] = await db
     .insert(playlistsTable)
-    .values(parsed.data)
+    .values({ ...parsed.data, tenantId })
     .returning();
 
   res.status(201).json({ ...playlist, itemCount: 0, totalDuration: null });
 });
 
 router.get("/playlists/:id", async (req, res): Promise<void> => {
+  const tenantId = getTenantId(req);
   const params = GetPlaylistParams.safeParse({ id: Number(req.params.id) });
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
     return;
   }
 
-  const playlist = await getPlaylistWithCount(params.data.id);
-  if (!playlist) {
+  const [pl] = await db.select().from(playlistsTable).where(and(eq(playlistsTable.id, params.data.id), eq(playlistsTable.tenantId, tenantId)));
+  if (!pl) {
     res.status(404).json({ error: "Playlist not found" });
     return;
   }
+
+  const playlist = await getPlaylistWithCount(params.data.id);
 
   const items = await db
     .select({
@@ -107,6 +113,7 @@ router.get("/playlists/:id", async (req, res): Promise<void> => {
 });
 
 router.patch("/playlists/:id", async (req, res): Promise<void> => {
+  const tenantId = getTenantId(req);
   const params = UpdatePlaylistParams.safeParse({ id: Number(req.params.id) });
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -127,7 +134,7 @@ router.patch("/playlists/:id", async (req, res): Promise<void> => {
   const [playlist] = await db
     .update(playlistsTable)
     .set(updates)
-    .where(eq(playlistsTable.id, params.data.id))
+    .where(and(eq(playlistsTable.id, params.data.id), eq(playlistsTable.tenantId, tenantId)))
     .returning();
 
   if (!playlist) {
@@ -140,6 +147,7 @@ router.patch("/playlists/:id", async (req, res): Promise<void> => {
 });
 
 router.delete("/playlists/:id", async (req, res): Promise<void> => {
+  const tenantId = getTenantId(req);
   const params = DeletePlaylistParams.safeParse({ id: Number(req.params.id) });
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -148,7 +156,7 @@ router.delete("/playlists/:id", async (req, res): Promise<void> => {
 
   const [playlist] = await db
     .delete(playlistsTable)
-    .where(eq(playlistsTable.id, params.data.id))
+    .where(and(eq(playlistsTable.id, params.data.id), eq(playlistsTable.tenantId, tenantId)))
     .returning();
 
   if (!playlist) {
@@ -159,10 +167,22 @@ router.delete("/playlists/:id", async (req, res): Promise<void> => {
   res.sendStatus(204);
 });
 
+async function verifyPlaylistOwnership(playlistId: number, tenantId: number): Promise<boolean> {
+  const [pl] = await db.select({ id: playlistsTable.id }).from(playlistsTable)
+    .where(and(eq(playlistsTable.id, playlistId), eq(playlistsTable.tenantId, tenantId)));
+  return !!pl;
+}
+
 router.get("/playlists/:id/items", async (req, res): Promise<void> => {
+  const tenantId = getTenantId(req);
   const params = ListPlaylistItemsParams.safeParse({ id: Number(req.params.id) });
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
+    return;
+  }
+
+  if (!(await verifyPlaylistOwnership(params.data.id, tenantId))) {
+    res.status(404).json({ error: "Playlist not found" });
     return;
   }
 
@@ -186,9 +206,15 @@ router.get("/playlists/:id/items", async (req, res): Promise<void> => {
 });
 
 router.post("/playlists/:id/items", async (req, res): Promise<void> => {
+  const tenantId = getTenantId(req);
   const params = AddPlaylistItemParams.safeParse({ id: Number(req.params.id) });
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
+    return;
+  }
+
+  if (!(await verifyPlaylistOwnership(params.data.id, tenantId))) {
+    res.status(404).json({ error: "Playlist not found" });
     return;
   }
 
@@ -218,12 +244,18 @@ router.post("/playlists/:id/items", async (req, res): Promise<void> => {
 });
 
 router.delete("/playlists/:id/items/:itemId", async (req, res): Promise<void> => {
+  const tenantId = getTenantId(req);
   const params = RemovePlaylistItemParams.safeParse({
     id: Number(req.params.id),
     itemId: Number(req.params.itemId),
   });
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
+    return;
+  }
+
+  if (!(await verifyPlaylistOwnership(params.data.id, tenantId))) {
+    res.status(404).json({ error: "Playlist not found" });
     return;
   }
 
@@ -241,9 +273,15 @@ router.delete("/playlists/:id/items/:itemId", async (req, res): Promise<void> =>
 });
 
 router.post("/playlists/:id/reorder", async (req, res): Promise<void> => {
+  const tenantId = getTenantId(req);
   const params = ReorderPlaylistItemsParams.safeParse({ id: Number(req.params.id) });
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
+    return;
+  }
+
+  if (!(await verifyPlaylistOwnership(params.data.id, tenantId))) {
+    res.status(404).json({ error: "Playlist not found" });
     return;
   }
 

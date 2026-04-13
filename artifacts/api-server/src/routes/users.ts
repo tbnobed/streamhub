@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { usersTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import {
   CreateUserBody,
   GetUserParams,
@@ -10,11 +10,12 @@ import {
   DeleteUserParams,
 } from "@workspace/api-zod";
 import { hashPassword } from "./auth";
-import { requireAuth, requireAdmin } from "../lib/authMiddleware";
+import { requireAuth, requireAdmin, getTenantId } from "../lib/authMiddleware";
 
 const router: IRouter = Router();
 
-router.get("/users", requireAuth, requireAdmin, async (_req, res): Promise<void> => {
+router.get("/users", requireAuth, requireAdmin, async (req, res): Promise<void> => {
+  const tenantId = getTenantId(req);
   const users = await db
     .select({
       id: usersTable.id,
@@ -25,11 +26,13 @@ router.get("/users", requireAuth, requireAdmin, async (_req, res): Promise<void>
       createdAt: usersTable.createdAt,
     })
     .from(usersTable)
+    .where(eq(usersTable.tenantId, tenantId))
     .orderBy(usersTable.createdAt);
   res.json(users);
 });
 
 router.post("/users", requireAuth, requireAdmin, async (req, res): Promise<void> => {
+  const tenantId = getTenantId(req);
   const parsed = CreateUserBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -41,7 +44,7 @@ router.post("/users", requireAuth, requireAdmin, async (req, res): Promise<void>
 
   const [user] = await db
     .insert(usersTable)
-    .values({ username, email, passwordHash, role })
+    .values({ username, email, passwordHash, role, tenantId })
     .returning({
       id: usersTable.id,
       username: usersTable.username,
@@ -55,6 +58,7 @@ router.post("/users", requireAuth, requireAdmin, async (req, res): Promise<void>
 });
 
 router.get("/users/:id", requireAuth, requireAdmin, async (req, res): Promise<void> => {
+  const tenantId = getTenantId(req);
   const params = GetUserParams.safeParse({ id: Number(req.params.id) });
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -71,7 +75,7 @@ router.get("/users/:id", requireAuth, requireAdmin, async (req, res): Promise<vo
       createdAt: usersTable.createdAt,
     })
     .from(usersTable)
-    .where(eq(usersTable.id, params.data.id));
+    .where(and(eq(usersTable.id, params.data.id), eq(usersTable.tenantId, tenantId)));
 
   if (!user) {
     res.status(404).json({ error: "User not found" });
@@ -82,6 +86,7 @@ router.get("/users/:id", requireAuth, requireAdmin, async (req, res): Promise<vo
 });
 
 router.patch("/users/:id", requireAuth, requireAdmin, async (req, res): Promise<void> => {
+  const tenantId = getTenantId(req);
   const params = UpdateUserParams.safeParse({ id: Number(req.params.id) });
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -108,7 +113,7 @@ router.patch("/users/:id", requireAuth, requireAdmin, async (req, res): Promise<
   const [user] = await db
     .update(usersTable)
     .set(updates)
-    .where(eq(usersTable.id, params.data.id))
+    .where(and(eq(usersTable.id, params.data.id), eq(usersTable.tenantId, tenantId)))
     .returning({
       id: usersTable.id,
       username: usersTable.username,
@@ -127,6 +132,7 @@ router.patch("/users/:id", requireAuth, requireAdmin, async (req, res): Promise<
 });
 
 router.delete("/users/:id", requireAuth, requireAdmin, async (req, res): Promise<void> => {
+  const tenantId = getTenantId(req);
   const params = DeleteUserParams.safeParse({ id: Number(req.params.id) });
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -135,7 +141,7 @@ router.delete("/users/:id", requireAuth, requireAdmin, async (req, res): Promise
 
   const [user] = await db
     .delete(usersTable)
-    .where(eq(usersTable.id, params.data.id))
+    .where(and(eq(usersTable.id, params.data.id), eq(usersTable.tenantId, tenantId)))
     .returning();
 
   if (!user) {

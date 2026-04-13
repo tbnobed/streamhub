@@ -1,7 +1,8 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { destinationsTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
+import { getTenantId } from "../lib/authMiddleware";
 import {
   CreateDestinationBody,
   GetDestinationParams,
@@ -15,8 +16,9 @@ import {
 const router: IRouter = Router();
 
 router.get("/destinations", async (req, res): Promise<void> => {
+  const tenantId = getTenantId(req);
   const params = ListDestinationsQueryParams.safeParse(req.query);
-  let destinations = await db.select().from(destinationsTable).orderBy(destinationsTable.createdAt);
+  let destinations = await db.select().from(destinationsTable).where(eq(destinationsTable.tenantId, tenantId)).orderBy(destinationsTable.createdAt);
 
   if (params.success && params.data.channelId != null) {
     destinations = destinations.filter((d) => d.channelId === params.data.channelId);
@@ -26,6 +28,7 @@ router.get("/destinations", async (req, res): Promise<void> => {
 });
 
 router.post("/destinations", async (req, res): Promise<void> => {
+  const tenantId = getTenantId(req);
   const parsed = CreateDestinationBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -37,6 +40,7 @@ router.post("/destinations", async (req, res): Promise<void> => {
     isActive: true,
     status: "idle",
     streamKey: parsed.data.streamKey || "",
+    tenantId,
   };
 
   const [dest] = await db
@@ -48,13 +52,14 @@ router.post("/destinations", async (req, res): Promise<void> => {
 });
 
 router.get("/destinations/:id", async (req, res): Promise<void> => {
+  const tenantId = getTenantId(req);
   const params = GetDestinationParams.safeParse({ id: Number(req.params.id) });
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
     return;
   }
 
-  const [dest] = await db.select().from(destinationsTable).where(eq(destinationsTable.id, params.data.id));
+  const [dest] = await db.select().from(destinationsTable).where(and(eq(destinationsTable.id, params.data.id), eq(destinationsTable.tenantId, tenantId)));
   if (!dest) {
     res.status(404).json({ error: "Destination not found" });
     return;
@@ -64,6 +69,7 @@ router.get("/destinations/:id", async (req, res): Promise<void> => {
 });
 
 router.patch("/destinations/:id", async (req, res): Promise<void> => {
+  const tenantId = getTenantId(req);
   const params = UpdateDestinationParams.safeParse({ id: Number(req.params.id) });
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -87,7 +93,7 @@ router.patch("/destinations/:id", async (req, res): Promise<void> => {
   const [dest] = await db
     .update(destinationsTable)
     .set(updates)
-    .where(eq(destinationsTable.id, params.data.id))
+    .where(and(eq(destinationsTable.id, params.data.id), eq(destinationsTable.tenantId, tenantId)))
     .returning();
 
   if (!dest) {
@@ -99,6 +105,7 @@ router.patch("/destinations/:id", async (req, res): Promise<void> => {
 });
 
 router.delete("/destinations/:id", async (req, res): Promise<void> => {
+  const tenantId = getTenantId(req);
   const params = DeleteDestinationParams.safeParse({ id: Number(req.params.id) });
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -107,7 +114,7 @@ router.delete("/destinations/:id", async (req, res): Promise<void> => {
 
   const [dest] = await db
     .delete(destinationsTable)
-    .where(eq(destinationsTable.id, params.data.id))
+    .where(and(eq(destinationsTable.id, params.data.id), eq(destinationsTable.tenantId, tenantId)))
     .returning();
 
   if (!dest) {
@@ -119,13 +126,14 @@ router.delete("/destinations/:id", async (req, res): Promise<void> => {
 });
 
 router.post("/destinations/:id/toggle", async (req, res): Promise<void> => {
+  const tenantId = getTenantId(req);
   const params = ToggleDestinationParams.safeParse({ id: Number(req.params.id) });
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
     return;
   }
 
-  const [existing] = await db.select().from(destinationsTable).where(eq(destinationsTable.id, params.data.id));
+  const [existing] = await db.select().from(destinationsTable).where(and(eq(destinationsTable.id, params.data.id), eq(destinationsTable.tenantId, tenantId)));
   if (!existing) {
     res.status(404).json({ error: "Destination not found" });
     return;

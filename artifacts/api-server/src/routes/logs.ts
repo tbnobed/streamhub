@@ -3,16 +3,18 @@ import { db } from "@workspace/db";
 import { auditLogsTable, workerEventsTable } from "@workspace/db";
 import { eq, desc } from "drizzle-orm";
 import { ListAuditLogsQueryParams, ListWorkerEventsQueryParams } from "@workspace/api-zod";
-import { requireAuth, requireAdmin } from "../lib/authMiddleware";
+import { requireAuth, requireAdmin, getTenantId } from "../lib/authMiddleware";
 
 const router: IRouter = Router();
 
 router.get("/logs/audit", requireAuth, requireAdmin, async (req, res): Promise<void> => {
+  const tenantId = getTenantId(req);
   const params = ListAuditLogsQueryParams.safeParse(req.query);
 
   let logs = await db
     .select()
     .from(auditLogsTable)
+    .where(eq(auditLogsTable.tenantId, tenantId))
     .orderBy(desc(auditLogsTable.createdAt));
 
   if (params.success) {

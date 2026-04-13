@@ -1,7 +1,8 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { youtubeAccountsTable, youtubeBroadcastsTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
+import { getTenantId } from "../lib/authMiddleware";
 import {
   DeleteYoutubeAccountParams,
   ListYoutubeBroadcastsQueryParams,
@@ -10,7 +11,8 @@ import {
 
 const router: IRouter = Router();
 
-router.get("/youtube/accounts", async (_req, res): Promise<void> => {
+router.get("/youtube/accounts", async (req, res): Promise<void> => {
+  const tenantId = getTenantId(req);
   const accounts = await db
     .select({
       id: youtubeAccountsTable.id,
@@ -21,12 +23,14 @@ router.get("/youtube/accounts", async (_req, res): Promise<void> => {
       connectedAt: youtubeAccountsTable.connectedAt,
     })
     .from(youtubeAccountsTable)
+    .where(eq(youtubeAccountsTable.tenantId, tenantId))
     .orderBy(youtubeAccountsTable.connectedAt);
 
   res.json(accounts);
 });
 
 router.delete("/youtube/accounts/:id", async (req, res): Promise<void> => {
+  const tenantId = getTenantId(req);
   const params = DeleteYoutubeAccountParams.safeParse({ id: Number(req.params.id) });
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -35,7 +39,7 @@ router.delete("/youtube/accounts/:id", async (req, res): Promise<void> => {
 
   const [account] = await db
     .delete(youtubeAccountsTable)
-    .where(eq(youtubeAccountsTable.id, params.data.id))
+    .where(and(eq(youtubeAccountsTable.id, params.data.id), eq(youtubeAccountsTable.tenantId, tenantId)))
     .returning();
 
   if (!account) {
@@ -57,8 +61,9 @@ router.get("/youtube/auth-url", async (_req, res): Promise<void> => {
 });
 
 router.get("/youtube/broadcasts", async (req, res): Promise<void> => {
+  const tenantId = getTenantId(req);
   const params = ListYoutubeBroadcastsQueryParams.safeParse(req.query);
-  let broadcasts = await db.select().from(youtubeBroadcastsTable).orderBy(youtubeBroadcastsTable.createdAt);
+  let broadcasts = await db.select().from(youtubeBroadcastsTable).where(eq(youtubeBroadcastsTable.tenantId, tenantId)).orderBy(youtubeBroadcastsTable.createdAt);
 
   if (params.success && params.data.channelId != null) {
     broadcasts = broadcasts.filter((b) => b.channelId === params.data.channelId);
@@ -68,6 +73,7 @@ router.get("/youtube/broadcasts", async (req, res): Promise<void> => {
 });
 
 router.post("/youtube/broadcasts", async (req, res): Promise<void> => {
+  const tenantId = getTenantId(req);
   const parsed = CreateYoutubeBroadcastBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -87,6 +93,7 @@ router.post("/youtube/broadcasts", async (req, res): Promise<void> => {
       youtubeAccountId: parsed.data.youtubeAccountId,
       scheduledStart: parsed.data.scheduledStart ? new Date(parsed.data.scheduledStart) : null,
       status: "created",
+      tenantId,
     })
     .returning();
 

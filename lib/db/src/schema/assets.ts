@@ -18,6 +18,7 @@ export const assetsTable = pgTable("assets", {
   status: text("status").notNull().default("pending"),
   userId: integer("user_id"),
   channelId: integer("channel_id"),
+  tenantId: integer("tenant_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

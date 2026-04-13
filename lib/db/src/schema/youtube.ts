@@ -11,6 +11,7 @@ export const youtubeAccountsTable = pgTable("youtube_accounts", {
   accessToken: text("access_token"),
   refreshToken: text("refresh_token"),
   tokenExpiresAt: timestamp("token_expires_at", { withTimezone: true }),
+  tenantId: integer("tenant_id"),
   connectedAt: timestamp("connected_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -23,6 +24,7 @@ export const youtubeBroadcastsTable = pgTable("youtube_broadcasts", {
   channelId: integer("channel_id"),
   youtubeAccountId: integer("youtube_account_id").notNull(),
   scheduledStart: timestamp("scheduled_start", { withTimezone: true }),
+  tenantId: integer("tenant_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

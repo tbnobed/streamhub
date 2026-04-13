@@ -9,6 +9,9 @@ interface User {
   role: string;
   timezone: string;
   displayName?: string | null;
+  tenantId?: number | null;
+  tenantName?: string | null;
+  tenantSlug?: string | null;
 }
 
 interface AuthContextValue {

@@ -4,6 +4,7 @@ import path from "node:path";
 import { db } from "@workspace/db";
 import { LocalStorageService } from "../lib/objectStorage";
 import { notifyStreamStarted, notifyStreamStopped } from "../lib/notifyUsers";
+import { getTenantId } from "../lib/authMiddleware";
 import {
   channelsTable,
   playlistsTable,
@@ -31,11 +32,12 @@ import {
 
 const router: IRouter = Router();
 
-router.get("/channels/summary", async (_req, res): Promise<void> => {
-  const channels = await db.select().from(channelsTable);
-  const destinations = await db.select().from(destinationsTable);
+router.get("/channels/summary", async (req, res): Promise<void> => {
+  const tenantId = getTenantId(req);
+  const channels = await db.select().from(channelsTable).where(eq(channelsTable.tenantId, tenantId));
+  const destinations = await db.select().from(destinationsTable).where(eq(destinationsTable.tenantId, tenantId));
   const workers = await db.select().from(workerNodesTable);
-  const assets = await db.select().from(assetsTable);
+  const assets = await db.select().from(assetsTable).where(eq(assetsTable.tenantId, tenantId));
 
   const onAirCount = channels.filter((c) => c.status === "on_air").length;
   const idleCount = channels.filter((c) => c.status === "idle").length;
@@ -57,12 +59,14 @@ router.get("/channels/summary", async (_req, res): Promise<void> => {
   });
 });
 
-router.get("/channels", async (_req, res): Promise<void> => {
-  const channels = await db.select().from(channelsTable).orderBy(channelsTable.createdAt);
+router.get("/channels", async (req, res): Promise<void> => {
+  const tenantId = getTenantId(req);
+  const channels = await db.select().from(channelsTable).where(eq(channelsTable.tenantId, tenantId)).orderBy(channelsTable.createdAt);
   res.json(channels);
 });
 
 router.post("/channels", async (req, res): Promise<void> => {
+  const tenantId = getTenantId(req);
   const parsed = CreateChannelBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -71,13 +75,14 @@ router.post("/channels", async (req, res): Promise<void> => {
 
   const [channel] = await db
     .insert(channelsTable)
-    .values({ ...parsed.data, status: "idle", sourceMode: "playlist" })
+    .values({ ...parsed.data, status: "idle", sourceMode: "playlist", tenantId })
     .returning();
 
   res.status(201).json(channel);
 });
 
 router.get("/channels/:id", async (req, res): Promise<void> => {
+  const tenantId = getTenantId(req);
   const params = GetChannelParams.safeParse({ id: Number(req.params.id) });
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -87,7 +92,7 @@ router.get("/channels/:id", async (req, res): Promise<void> => {
   const [channel] = await db
     .select()
     .from(channelsTable)
-    .where(eq(channelsTable.id, params.data.id));
+    .where(and(eq(channelsTable.id, params.data.id), eq(channelsTable.tenantId, tenantId)));
 
   if (!channel) {
     res.status(404).json({ error: "Channel not found" });
@@ -175,6 +180,7 @@ router.get("/channels/:id", async (req, res): Promise<void> => {
 });
 
 router.patch("/channels/:id", async (req, res): Promise<void> => {
+  const tenantId = getTenantId(req);
   const params = UpdateChannelParams.safeParse({ id: Number(req.params.id) });
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -203,7 +209,7 @@ router.patch("/channels/:id", async (req, res): Promise<void> => {
   const [channel] = await db
     .update(channelsTable)
     .set(updates)
-    .where(eq(channelsTable.id, params.data.id))
+    .where(and(eq(channelsTable.id, params.data.id), eq(channelsTable.tenantId, tenantId)))
     .returning();
 
   if (!channel) {
@@ -215,6 +221,7 @@ router.patch("/channels/:id", async (req, res): Promise<void> => {
 });
 
 router.delete("/channels/:id", async (req, res): Promise<void> => {
+  const tenantId = getTenantId(req);
   const params = DeleteChannelParams.safeParse({ id: Number(req.params.id) });
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -223,7 +230,7 @@ router.delete("/channels/:id", async (req, res): Promise<void> => {
 
   const [channel] = await db
     .delete(channelsTable)
-    .where(eq(channelsTable.id, params.data.id))
+    .where(and(eq(channelsTable.id, params.data.id), eq(channelsTable.tenantId, tenantId)))
     .returning();
 
   if (!channel) {
@@ -235,13 +242,14 @@ router.delete("/channels/:id", async (req, res): Promise<void> => {
 });
 
 router.post("/channels/:id/start", async (req, res): Promise<void> => {
+  const tenantId = getTenantId(req);
   const params = StartChannelParams.safeParse({ id: Number(req.params.id) });
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
     return;
   }
 
-  const [channel] = await db.select().from(channelsTable).where(eq(channelsTable.id, params.data.id));
+  const [channel] = await db.select().from(channelsTable).where(and(eq(channelsTable.id, params.data.id), eq(channelsTable.tenantId, tenantId)));
   if (!channel) {
     res.status(404).json({ error: "Channel not found" });
     return;
@@ -367,12 +375,14 @@ router.post("/channels/:id/start", async (req, res): Promise<void> => {
     channelName: channel.name,
     sourceMode: channel.sourceMode,
     errorCount: 0,
+    tenantId,
   });
 
   await db.insert(auditLogsTable).values({
     action: "channel_started",
     resourceType: "channel",
     resourceId: channel.id,
+    tenantId,
     details: {
       channelName: channel.name,
       jobId: job.id,
@@ -401,13 +411,14 @@ router.post("/channels/:id/start", async (req, res): Promise<void> => {
 });
 
 router.post("/channels/:id/stop", async (req, res): Promise<void> => {
+  const tenantId = getTenantId(req);
   const params = StopChannelParams.safeParse({ id: Number(req.params.id) });
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
     return;
   }
 
-  const [channel] = await db.select().from(channelsTable).where(eq(channelsTable.id, params.data.id));
+  const [channel] = await db.select().from(channelsTable).where(and(eq(channelsTable.id, params.data.id), eq(channelsTable.tenantId, tenantId)));
   if (!channel) {
     res.status(404).json({ error: "Channel not found" });
     return;
@@ -447,6 +458,7 @@ router.post("/channels/:id/stop", async (req, res): Promise<void> => {
     action: "channel_stopped",
     resourceType: "channel",
     resourceId: channel.id,
+    tenantId,
     details: { channelName: channel.name, jobsStopped: runningJobs.length + pendingJobs.length },
   });
 
@@ -458,6 +470,7 @@ router.post("/channels/:id/stop", async (req, res): Promise<void> => {
 });
 
 router.post("/channels/:id/destinations/:destId/stop", async (req, res): Promise<void> => {
+  const tenantId = getTenantId(req);
   const channelId = Number(req.params.id);
   const destId = req.params.destId;
   if (!channelId || !destId) {
@@ -465,7 +478,7 @@ router.post("/channels/:id/destinations/:destId/stop", async (req, res): Promise
     return;
   }
 
-  const [channel] = await db.select().from(channelsTable).where(eq(channelsTable.id, channelId));
+  const [channel] = await db.select().from(channelsTable).where(and(eq(channelsTable.id, channelId), eq(channelsTable.tenantId, tenantId)));
   if (!channel) {
     res.status(404).json({ error: "Channel not found" });
     return;
@@ -493,6 +506,7 @@ router.post("/channels/:id/destinations/:destId/stop", async (req, res): Promise
     action: "destination_stopped",
     resourceType: "channel",
     resourceId: channelId,
+    tenantId,
     details: { channelName: channel.name, destId, jobId: job.id },
   });
 
@@ -500,6 +514,7 @@ router.post("/channels/:id/destinations/:destId/stop", async (req, res): Promise
 });
 
 router.post("/channels/:id/destinations/:destId/restart", async (req, res): Promise<void> => {
+  const tenantId = getTenantId(req);
   const channelId = Number(req.params.id);
   const destId = req.params.destId;
   if (!channelId || !destId) {
@@ -507,7 +522,7 @@ router.post("/channels/:id/destinations/:destId/restart", async (req, res): Prom
     return;
   }
 
-  const [channel] = await db.select().from(channelsTable).where(eq(channelsTable.id, channelId));
+  const [channel] = await db.select().from(channelsTable).where(and(eq(channelsTable.id, channelId), eq(channelsTable.tenantId, tenantId)));
   if (!channel) {
     res.status(404).json({ error: "Channel not found" });
     return;
@@ -535,6 +550,7 @@ router.post("/channels/:id/destinations/:destId/restart", async (req, res): Prom
     action: "destination_restarted",
     resourceType: "channel",
     resourceId: channelId,
+    tenantId,
     details: { channelName: channel.name, destId, jobId: job.id },
   });
 
@@ -542,6 +558,7 @@ router.post("/channels/:id/destinations/:destId/restart", async (req, res): Prom
 });
 
 router.post("/channels/:id/switch-source", async (req, res): Promise<void> => {
+  const tenantId = getTenantId(req);
   const params = SwitchChannelSourceParams.safeParse({ id: Number(req.params.id) });
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -564,7 +581,7 @@ router.post("/channels/:id/switch-source", async (req, res): Promise<void> => {
   const [channel] = await db
     .update(channelsTable)
     .set(updates)
-    .where(eq(channelsTable.id, params.data.id))
+    .where(and(eq(channelsTable.id, params.data.id), eq(channelsTable.tenantId, tenantId)))
     .returning();
 
   if (!channel) {
@@ -576,6 +593,7 @@ router.post("/channels/:id/switch-source", async (req, res): Promise<void> => {
     action: "source_switched",
     resourceType: "channel",
     resourceId: channel.id,
+    tenantId,
     details: { sourceMode: parsed.data.sourceMode },
   });
 

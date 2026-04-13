@@ -1,7 +1,8 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { liveInputsTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
+import { getTenantId } from "../lib/authMiddleware";
 import {
   CreateLiveInputBody,
   GetLiveInputParams,
@@ -29,8 +30,9 @@ function buildIngestUrl(protocol: string, streamKey: string): string {
 }
 
 router.get("/live-inputs", async (req, res): Promise<void> => {
+  const tenantId = getTenantId(req);
   const params = ListLiveInputsQueryParams.safeParse(req.query);
-  let inputs = await db.select().from(liveInputsTable).orderBy(liveInputsTable.createdAt);
+  let inputs = await db.select().from(liveInputsTable).where(eq(liveInputsTable.tenantId, tenantId)).orderBy(liveInputsTable.createdAt);
 
   if (params.success && params.data.channelId != null) {
     inputs = inputs.filter((i) => i.channelId === params.data.channelId);
@@ -40,6 +42,7 @@ router.get("/live-inputs", async (req, res): Promise<void> => {
 });
 
 router.post("/live-inputs", async (req, res): Promise<void> => {
+  const tenantId = getTenantId(req);
   const parsed = CreateLiveInputBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -59,6 +62,7 @@ router.post("/live-inputs", async (req, res): Promise<void> => {
       ingestUrl,
       status: "idle",
       reconnectCount: 0,
+      tenantId,
     })
     .returning();
 
@@ -66,13 +70,14 @@ router.post("/live-inputs", async (req, res): Promise<void> => {
 });
 
 router.get("/live-inputs/:id", async (req, res): Promise<void> => {
+  const tenantId = getTenantId(req);
   const params = GetLiveInputParams.safeParse({ id: Number(req.params.id) });
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
     return;
   }
 
-  const [input] = await db.select().from(liveInputsTable).where(eq(liveInputsTable.id, params.data.id));
+  const [input] = await db.select().from(liveInputsTable).where(and(eq(liveInputsTable.id, params.data.id), eq(liveInputsTable.tenantId, tenantId)));
   if (!input) {
     res.status(404).json({ error: "Live input not found" });
     return;
@@ -82,6 +87,7 @@ router.get("/live-inputs/:id", async (req, res): Promise<void> => {
 });
 
 router.patch("/live-inputs/:id", async (req, res): Promise<void> => {
+  const tenantId = getTenantId(req);
   const params = UpdateLiveInputParams.safeParse({ id: Number(req.params.id) });
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -101,7 +107,7 @@ router.patch("/live-inputs/:id", async (req, res): Promise<void> => {
   const [input] = await db
     .update(liveInputsTable)
     .set(updates)
-    .where(eq(liveInputsTable.id, params.data.id))
+    .where(and(eq(liveInputsTable.id, params.data.id), eq(liveInputsTable.tenantId, tenantId)))
     .returning();
 
   if (!input) {
@@ -113,6 +119,7 @@ router.patch("/live-inputs/:id", async (req, res): Promise<void> => {
 });
 
 router.delete("/live-inputs/:id", async (req, res): Promise<void> => {
+  const tenantId = getTenantId(req);
   const params = DeleteLiveInputParams.safeParse({ id: Number(req.params.id) });
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -121,7 +128,7 @@ router.delete("/live-inputs/:id", async (req, res): Promise<void> => {
 
   const [input] = await db
     .delete(liveInputsTable)
-    .where(eq(liveInputsTable.id, params.data.id))
+    .where(and(eq(liveInputsTable.id, params.data.id), eq(liveInputsTable.tenantId, tenantId)))
     .returning();
 
   if (!input) {
@@ -133,13 +140,14 @@ router.delete("/live-inputs/:id", async (req, res): Promise<void> => {
 });
 
 router.post("/live-inputs/:id/regenerate-key", async (req, res): Promise<void> => {
+  const tenantId = getTenantId(req);
   const params = RegenerateLiveInputKeyParams.safeParse({ id: Number(req.params.id) });
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
     return;
   }
 
-  const [existing] = await db.select().from(liveInputsTable).where(eq(liveInputsTable.id, params.data.id));
+  const [existing] = await db.select().from(liveInputsTable).where(and(eq(liveInputsTable.id, params.data.id), eq(liveInputsTable.tenantId, tenantId)));
   if (!existing) {
     res.status(404).json({ error: "Live input not found" });
     return;
