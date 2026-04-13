@@ -68,7 +68,7 @@ export default function UsersPage() {
   const [form, setForm] = useState({ username: "", email: "", password: "", role: "operator" });
   const [editForm, setEditForm] = useState({ email: "", role: "", password: "", isActive: true });
   const [inviteOpen, setInviteOpen] = useState(false);
-  const [inviteForm, setInviteForm] = useState({ username: "", email: "", role: "operator" });
+  const [inviteForm, setInviteForm] = useState({ email: "", role: "operator" });
   const isAdmin = currentUser?.role === "admin";
 
   const { data: users = [], isLoading } = useQuery<UserRecord[]>({
@@ -434,20 +434,11 @@ export default function UsersPage() {
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              if (!inviteForm.username || !inviteForm.email) return;
+              if (!inviteForm.email) return;
               inviteMut.mutate(inviteForm);
             }}
             className="space-y-4"
           >
-            <div className="space-y-2">
-              <Label>Username</Label>
-              <Input
-                value={inviteForm.username}
-                onChange={(e) => setInviteForm({ ...inviteForm, username: e.target.value })}
-                placeholder="johndoe"
-                required
-              />
-            </div>
             <div className="space-y-2">
               <Label>Email</Label>
               <Input

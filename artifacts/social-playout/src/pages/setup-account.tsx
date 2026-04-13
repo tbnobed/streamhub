@@ -16,9 +16,10 @@ export default function SetupAccountPage() {
   const { toast } = useToast();
 
   const [token, setToken] = useState("");
-  const [inviteInfo, setInviteInfo] = useState<{ email: string; username: string; role: string } | null>(null);
+  const [inviteInfo, setInviteInfo] = useState<{ email: string; role: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -49,6 +50,10 @@ export default function SetupAccountPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (username.length < 3) {
+      toast({ variant: "destructive", title: "Username too short", description: "Username must be at least 3 characters." });
+      return;
+    }
     if (password.length < 6) {
       toast({ variant: "destructive", title: "Password too short", description: "Password must be at least 6 characters." });
       return;
@@ -63,7 +68,7 @@ export default function SetupAccountPage() {
       const res = await fetch(`${apiBase()}/invites/setup-account`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, password }),
+        body: JSON.stringify({ token, username, password }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -131,15 +136,11 @@ export default function SetupAccountPage() {
             <CardHeader>
               <CardTitle>Set Up Your Account</CardTitle>
               <CardDescription>
-                Choose a password for your account to get started.
+                Choose a username and password to get started.
               </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="mb-6 p-3 rounded-md bg-accent/30 space-y-1">
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Username</span>
-                  <span className="font-medium">{inviteInfo.username}</span>
-                </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Email</span>
                   <span className="font-medium">{inviteInfo.email}</span>
@@ -151,6 +152,18 @@ export default function SetupAccountPage() {
               </div>
 
               <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="username">Username</Label>
+                  <Input
+                    id="username"
+                    type="text"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    placeholder="Choose a username"
+                    required
+                    minLength={3}
+                  />
+                </div>
                 <div className="space-y-2">
                   <Label htmlFor="password">Password</Label>
                   <Input

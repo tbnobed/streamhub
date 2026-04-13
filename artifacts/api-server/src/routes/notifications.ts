@@ -83,11 +83,11 @@ function getSetupUrl(token: string): string {
 }
 
 router.post("/invites", requireAuth, requireAdmin, async (req, res): Promise<void> => {
-  const { email, role, username } = req.body;
+  const { email, role } = req.body;
   const inviter = (req as any).user;
 
-  if (!email || !username) {
-    res.status(400).json({ error: "Email and username are required" });
+  if (!email) {
+    res.status(400).json({ error: "Email is required" });
     return;
   }
 
@@ -97,19 +97,12 @@ router.post("/invites", requireAuth, requireAdmin, async (req, res): Promise<voi
     return;
   }
 
-  const [existingUsername] = await db.select().from(usersTable).where(eq(usersTable.username, username));
-  if (existingUsername) {
-    res.status(409).json({ error: "A user with this username already exists" });
-    return;
-  }
-
   const token = randomBytes(32).toString("hex");
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
   const [invite] = await db.insert(invitesTable)
     .values({
       email,
-      username,
       role: role || "operator",
       token,
       invitedBy: inviter.id,
@@ -130,7 +123,7 @@ router.post("/invites", requireAuth, requireAdmin, async (req, res): Promise<voi
     resourceType: "invite",
     resourceId: invite.id,
     userId: inviter.id,
-    details: { email, username, role: role || "operator", emailSent },
+    details: { email, role: role || "operator", emailSent },
   });
 
   res.status(201).json({ invite, emailSent });
@@ -208,19 +201,30 @@ router.get("/invites/verify/:token", async (req, res): Promise<void> => {
     return;
   }
 
-  res.json({ email: invite.email, username: invite.username, role: invite.role });
+  res.json({ email: invite.email, role: invite.role });
 });
 
 router.post("/invites/setup-account", async (req, res): Promise<void> => {
-  const { token, password } = req.body;
+  const { token, password, username } = req.body;
 
-  if (!token || !password) {
-    res.status(400).json({ error: "Token and password are required" });
+  if (!token || !password || !username) {
+    res.status(400).json({ error: "Token, username, and password are required" });
+    return;
+  }
+
+  if (username.length < 3) {
+    res.status(400).json({ error: "Username must be at least 3 characters" });
     return;
   }
 
   if (password.length < 6) {
     res.status(400).json({ error: "Password must be at least 6 characters" });
+    return;
+  }
+
+  const [existingUsername] = await db.select().from(usersTable).where(eq(usersTable.username, username));
+  if (existingUsername) {
+    res.status(409).json({ error: "This username is already taken" });
     return;
   }
 
@@ -248,7 +252,7 @@ router.post("/invites/setup-account", async (req, res): Promise<void> => {
 
   const [user] = await db.insert(usersTable)
     .values({
-      username: invite.username || invite.email.split("@")[0],
+      username,
       email: invite.email,
       passwordHash: hashPassword(password),
       role: invite.role || "operator",
