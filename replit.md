@@ -107,6 +107,9 @@ All routes under `/api`:
 - `GET /api/logs/audit` — Audit logs
 - `GET /api/tenants` — List all tenants with user counts (admin)
 - `POST /api/tenants` — Create new tenant with initial admin user (admin)
+- `PATCH /api/tenants/:id` — Edit any tenant name/slug (admin)
+- `GET /api/tenants/:id/users` — List users in a specific tenant (admin)
+- `PATCH /api/tenants/:id/users/:userId` — Move a user to a different tenant (admin)
 - `GET /api/tenants/current` — Current tenant info
 - `PATCH /api/tenants/current` — Update tenant settings (admin)
 

@@ -120,4 +120,109 @@ router.post("/tenants", requireAuth, requireAdmin, async (req, res): Promise<voi
   res.status(201).json(tenant);
 });
 
+router.patch("/tenants/:id", requireAuth, requireAdmin, async (req, res): Promise<void> => {
+  const tenantId = Number(req.params.id);
+  if (isNaN(tenantId)) {
+    res.status(400).json({ error: "Invalid tenant ID" });
+    return;
+  }
+
+  const { name, slug, settings } = req.body;
+  const updates: Record<string, unknown> = {};
+  if (name != null) updates.name = name;
+  if (slug != null) updates.slug = slug.toLowerCase().replace(/[^a-z0-9-]/g, "");
+  if (settings != null) updates.settings = settings;
+
+  if (Object.keys(updates).length === 0) {
+    res.status(400).json({ error: "No fields to update" });
+    return;
+  }
+
+  if (updates.slug) {
+    const [existing] = await db
+      .select({ id: tenantsTable.id })
+      .from(tenantsTable)
+      .where(eq(tenantsTable.slug, updates.slug as string));
+    if (existing && existing.id !== tenantId) {
+      res.status(409).json({ error: "A tenant with this slug already exists" });
+      return;
+    }
+  }
+
+  const [tenant] = await db
+    .update(tenantsTable)
+    .set(updates)
+    .where(eq(tenantsTable.id, tenantId))
+    .returning();
+
+  if (!tenant) {
+    res.status(404).json({ error: "Tenant not found" });
+    return;
+  }
+
+  res.json(tenant);
+});
+
+router.get("/tenants/:id/users", requireAuth, requireAdmin, async (req, res): Promise<void> => {
+  const tenantId = Number(req.params.id);
+  if (isNaN(tenantId)) {
+    res.status(400).json({ error: "Invalid tenant ID" });
+    return;
+  }
+
+  const users = await db
+    .select({
+      id: usersTable.id,
+      username: usersTable.username,
+      email: usersTable.email,
+      role: usersTable.role,
+      isActive: usersTable.isActive,
+      tenantId: usersTable.tenantId,
+      createdAt: usersTable.createdAt,
+    })
+    .from(usersTable)
+    .where(eq(usersTable.tenantId, tenantId))
+    .orderBy(usersTable.createdAt);
+
+  res.json(users);
+});
+
+router.patch("/tenants/:id/users/:userId", requireAuth, requireAdmin, async (req, res): Promise<void> => {
+  const tenantId = Number(req.params.id);
+  const userId = Number(req.params.userId);
+  if (isNaN(tenantId) || isNaN(userId)) {
+    res.status(400).json({ error: "Invalid tenant or user ID" });
+    return;
+  }
+
+  const [targetTenant] = await db
+    .select({ id: tenantsTable.id })
+    .from(tenantsTable)
+    .where(eq(tenantsTable.id, tenantId));
+
+  if (!targetTenant) {
+    res.status(404).json({ error: "Tenant not found" });
+    return;
+  }
+
+  const [user] = await db
+    .update(usersTable)
+    .set({ tenantId })
+    .where(eq(usersTable.id, userId))
+    .returning({
+      id: usersTable.id,
+      username: usersTable.username,
+      email: usersTable.email,
+      role: usersTable.role,
+      tenantId: usersTable.tenantId,
+    });
+
+  if (!user) {
+    res.status(404).json({ error: "User not found" });
+    return;
+  }
+
+  res.json(user);
+});
+
 export default router;
