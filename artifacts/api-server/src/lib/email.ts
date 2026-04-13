@@ -53,8 +53,7 @@ export async function sendInviteEmail(
   to: string,
   inviterName: string,
   role: string,
-  loginUrl: string,
-  tempPassword: string,
+  setupUrl: string,
 ): Promise<boolean> {
   const subject = `You've been invited to ${APP_NAME}`;
   const html = `
@@ -67,17 +66,16 @@ export async function sendInviteEmail(
           <strong>${escapeHtml(inviterName)}</strong> has invited you to join as <strong style="color: #f97316;">${escapeHtml(role)}</strong>.
         </p>
         
-        <div style="background: #16162a; border-radius: 8px; padding: 20px; margin: 24px 0;">
-          <p style="margin: 0 0 8px 0; font-size: 13px; color: #888;">Your temporary credentials:</p>
-          <p style="margin: 0; font-size: 14px;"><strong>Password:</strong> <code style="background: #222; padding: 2px 8px; border-radius: 4px; color: #f97316;">${tempPassword}</code></p>
-        </div>
+        <p style="font-size: 14px; line-height: 1.6; color: #aaa;">
+          Click the button below to set up your password and activate your account.
+        </p>
         
-        <a href="${loginUrl}" style="display: inline-block; background: #f97316; color: #fff; text-decoration: none; padding: 12px 32px; border-radius: 8px; font-weight: 600; font-size: 14px; margin: 16px 0;">
-          Sign In Now
+        <a href="${escapeHtml(setupUrl)}" style="display: inline-block; background: #f97316; color: #fff; text-decoration: none; padding: 12px 32px; border-radius: 8px; font-weight: 600; font-size: 14px; margin: 16px 0;">
+          Set Up Your Account
         </a>
         
         <p style="font-size: 12px; color: #666; margin: 24px 0 0 0;">
-          Please change your password after your first login.
+          This link expires in 7 days. If you didn't expect this invitation, you can safely ignore this email.
         </p>
       </div>
     </div>

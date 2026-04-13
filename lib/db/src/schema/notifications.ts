@@ -14,6 +14,7 @@ export const notificationPrefsTable = pgTable("notification_prefs", {
 export const invitesTable = pgTable("invites", {
   id: serial("id").primaryKey(),
   email: text("email").notNull(),
+  username: text("username"),
   role: text("role").notNull().default("operator"),
   token: text("token").notNull().unique(),
   invitedBy: integer("invited_by").references(() => usersTable.id),

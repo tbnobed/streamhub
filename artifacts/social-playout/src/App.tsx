@@ -21,6 +21,7 @@ import WorkersPage from "@/pages/workers";
 import LogsPage from "@/pages/logs";
 import UsersPage from "@/pages/users";
 import InvitesPage from "@/pages/invites";
+import SetupAccountPage from "@/pages/setup-account";
 import NotFound from "@/pages/not-found";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -84,6 +85,7 @@ function Router() {
       <Route path="/notifications">
         {() => <ProtectedRoute><InvitesPage /></ProtectedRoute>}
       </Route>
+      <Route path="/setup-account" component={SetupAccountPage} />
       <Route component={NotFound} />
     </Switch>
   );

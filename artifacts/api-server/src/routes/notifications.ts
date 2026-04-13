@@ -77,6 +77,11 @@ router.get("/invites", requireAuth, requireAdmin, async (_req, res): Promise<voi
   res.json(invites);
 });
 
+function getSetupUrl(token: string): string {
+  const appUrl = process.env.APP_URL || `https://${process.env.REPLIT_DEV_DOMAIN || "localhost"}`;
+  return `${appUrl}/setup-account?token=${token}`;
+}
+
 router.post("/invites", requireAuth, requireAdmin, async (req, res): Promise<void> => {
   const { email, role, username } = req.body;
   const inviter = (req as any).user;
@@ -98,27 +103,13 @@ router.post("/invites", requireAuth, requireAdmin, async (req, res): Promise<voi
     return;
   }
 
-  const tempPassword = randomBytes(6).toString("hex");
   const token = randomBytes(32).toString("hex");
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-
-  const [user] = await db.insert(usersTable)
-    .values({
-      username,
-      email,
-      passwordHash: hashPassword(tempPassword),
-      role: role || "operator",
-    })
-    .returning({
-      id: usersTable.id,
-      username: usersTable.username,
-      email: usersTable.email,
-      role: usersTable.role,
-    });
 
   const [invite] = await db.insert(invitesTable)
     .values({
       email,
+      username,
       role: role || "operator",
       token,
       invitedBy: inviter.id,
@@ -126,31 +117,60 @@ router.post("/invites", requireAuth, requireAdmin, async (req, res): Promise<voi
     })
     .returning();
 
-  const appUrl = process.env.APP_URL || `https://${process.env.REPLIT_DEV_DOMAIN || "localhost"}`;
-  const loginUrl = `${appUrl}/login`;
-
+  const setupUrl = getSetupUrl(token);
   const emailSent = await sendInviteEmail(
     email,
     inviter.username,
     role || "operator",
-    loginUrl,
-    tempPassword,
+    setupUrl,
   );
 
   await db.insert(auditLogsTable).values({
     action: "user_invited",
-    resourceType: "user",
-    resourceId: user.id,
+    resourceType: "invite",
+    resourceId: invite.id,
     userId: inviter.id,
-    details: { email, role: role || "operator", emailSent },
+    details: { email, username, role: role || "operator", emailSent },
   });
 
-  res.status(201).json({
-    invite,
-    user,
-    emailSent,
-    tempPassword: emailSent ? undefined : tempPassword,
-  });
+  res.status(201).json({ invite, emailSent });
+});
+
+router.post("/invites/:id/resend", requireAuth, requireAdmin, async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (!id) {
+    res.status(400).json({ error: "Invalid invite ID" });
+    return;
+  }
+
+  const [invite] = await db.select().from(invitesTable).where(eq(invitesTable.id, id));
+  if (!invite) {
+    res.status(404).json({ error: "Invite not found" });
+    return;
+  }
+
+  if (invite.accepted) {
+    res.status(400).json({ error: "This invite has already been accepted" });
+    return;
+  }
+
+  const newToken = randomBytes(32).toString("hex");
+  const newExpiry = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+  await db.update(invitesTable)
+    .set({ token: newToken, expiresAt: newExpiry })
+    .where(eq(invitesTable.id, id));
+
+  const inviter = (req as any).user;
+  const setupUrl = getSetupUrl(newToken);
+  const emailSent = await sendInviteEmail(
+    invite.email,
+    inviter.username,
+    invite.role,
+    setupUrl,
+  );
+
+  res.json({ ok: true, emailSent });
 });
 
 router.delete("/invites/:id", requireAuth, requireAdmin, async (req, res): Promise<void> => {
@@ -167,6 +187,91 @@ router.delete("/invites/:id", requireAuth, requireAdmin, async (req, res): Promi
   }
 
   res.sendStatus(204);
+});
+
+router.get("/invites/verify/:token", async (req, res): Promise<void> => {
+  const { token } = req.params;
+
+  const [invite] = await db.select().from(invitesTable).where(eq(invitesTable.token, token));
+  if (!invite) {
+    res.status(404).json({ error: "Invalid or expired invitation link" });
+    return;
+  }
+
+  if (invite.accepted) {
+    res.status(400).json({ error: "This invitation has already been used" });
+    return;
+  }
+
+  if (new Date(invite.expiresAt) < new Date()) {
+    res.status(410).json({ error: "This invitation has expired. Please ask your administrator to resend it." });
+    return;
+  }
+
+  res.json({ email: invite.email, username: invite.username, role: invite.role });
+});
+
+router.post("/invites/setup-account", async (req, res): Promise<void> => {
+  const { token, password } = req.body;
+
+  if (!token || !password) {
+    res.status(400).json({ error: "Token and password are required" });
+    return;
+  }
+
+  if (password.length < 6) {
+    res.status(400).json({ error: "Password must be at least 6 characters" });
+    return;
+  }
+
+  const [invite] = await db.select().from(invitesTable).where(eq(invitesTable.token, token));
+  if (!invite) {
+    res.status(404).json({ error: "Invalid or expired invitation link" });
+    return;
+  }
+
+  if (invite.accepted) {
+    res.status(400).json({ error: "This invitation has already been used" });
+    return;
+  }
+
+  if (new Date(invite.expiresAt) < new Date()) {
+    res.status(410).json({ error: "This invitation has expired. Please ask your administrator to resend it." });
+    return;
+  }
+
+  const [existingUser] = await db.select().from(usersTable).where(eq(usersTable.email, invite.email));
+  if (existingUser) {
+    res.status(409).json({ error: "An account with this email already exists" });
+    return;
+  }
+
+  const [user] = await db.insert(usersTable)
+    .values({
+      username: invite.username || invite.email.split("@")[0],
+      email: invite.email,
+      passwordHash: hashPassword(password),
+      role: invite.role || "operator",
+    })
+    .returning({
+      id: usersTable.id,
+      username: usersTable.username,
+      email: usersTable.email,
+      role: usersTable.role,
+    });
+
+  await db.update(invitesTable)
+    .set({ accepted: true })
+    .where(eq(invitesTable.id, invite.id));
+
+  await db.insert(auditLogsTable).values({
+    action: "invite_accepted",
+    resourceType: "user",
+    resourceId: user.id,
+    details: { email: invite.email, role: invite.role },
+  });
+
+  res.json({ ok: true, user });
 });
 
 export default router;
