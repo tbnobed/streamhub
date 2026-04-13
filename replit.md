@@ -44,6 +44,8 @@ Port 80 (proxy)
 - Invited users inherit the inviter's tenant
 - Login/me responses include `tenantId`, `tenantName`, `tenantSlug`
 - Admin-only tenant settings page at `/settings` (GET/PATCH `/api/tenants/current`)
+- Admin can create new tenants with an initial admin user (POST `/api/tenants`)
+- Admin can list all tenants with user counts (GET `/api/tenants`)
 
 ## Database
 - PostgreSQL via `lib/db` (Drizzle ORM)
@@ -103,6 +105,8 @@ All routes under `/api`:
 - `GET/POST /api/invites` — List/create user invites (admin)
 - `DELETE /api/invites/:id` — Delete invite (admin)
 - `GET /api/logs/audit` — Audit logs
+- `GET /api/tenants` — List all tenants with user counts (admin)
+- `POST /api/tenants` — Create new tenant with initial admin user (admin)
 - `GET /api/tenants/current` — Current tenant info
 - `PATCH /api/tenants/current` — Update tenant settings (admin)
 
