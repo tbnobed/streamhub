@@ -1,0 +1,11 @@
+{"level":30,"time":1776056477779,"pid":1,"hostname":"e6496d323c62","to":"obsandoval@gmail.com","subject":"You've been invited to Media Playout Manager","msg":"Email sent"}
+frontend-1  | 107.180.223.226 - - [13/Apr/2026:05:01:17 +0000] "POST /api/invites/1/resend HTTP/1.1" 200 28 "https://obr.obtv.io/users" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "136.52.20.30"
+api-1       | {"level":30,"time":1776056477781,"pid":1,"hostname":"e6496d323c62","req":{"id":78,"method":"POST","url":"/api/invites/1/resend"},"res":{"statusCode":200},"responseTime":418,"msg":"request completed"}
+frontend-1  | 107.180.223.226 - - [13/Apr/2026:05:01:17 +0000] "GET /api/invites HTTP/1.1" 200 168 "https://obr.obtv.io/users" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "136.52.20.30"
+api-1       | {"level":30,"time":1776056477854,"pid":1,"hostname":"e6496d323c62","req":{"id":79,"method":"GET","url":"/api/invites"},"res":{"statusCode":200},"responseTime":7,"msg":"request completed"}
+api-1       | {"level":30,"time":1776056481619,"pid":1,"hostname":"e6496d323c62","req":{"id":80,"method":"POST","url":"/api/workers/heartbeat"},"res":{"statusCode":200},"responseTime":16,"msg":"request completed"}
+api-1       | {"level":30,"time":1776056481656,"pid":1,"hostname":"e6496d323c62","req":{"id":81,"method":"GET","url":"/api/workers/jobs"},"res":{"statusCode":200},"responseTime":7,"msg":"request completed"}
+api-1       | {"level":30,"time":1776056486662,"pid":1,"hostname":"e6496d323c62","req":{"id":82,"method":"GET","url":"/api/workers/jobs"},"res":{"statusCode":200},"responseTime":7,"msg":"request completed"}
+api-1       | {"level":30,"time":1776056491664,"pid":1,"hostname":"e6496d323c62","req":{"id":83,"method":"GET","url":"/api/workers/jobs"},"res":{"statusCode":200},"responseTime":7,"msg":"request completed"}
+api-1       | {"level":30,"time":1776056496618,"pid":1,"hostname":"e6496d323c62","req":{"id":84,"method":"POST","url":"/api/workers/heartbeat"},"res":{"statusCode":200},"responseTime":13,"msg":"request completed"}
+api-1       | {"level":30,"time":1776056496665,"pid":1,"hostname":"e6496d323c62","req":{"id":85,"method":"GET","url":"/api/workers/jobs"},"res":{"statusCode":200},"responseTime":10,"msg":"request completed"}
