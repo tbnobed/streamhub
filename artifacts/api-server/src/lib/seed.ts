@@ -6,12 +6,83 @@ import {
   destinationsTable,
   auditLogsTable,
   tenantsTable,
+  assetsTable,
+  playlistsTable,
+  streamSessionsTable,
+  notificationPrefsTable,
+  invitesTable,
 } from "@workspace/db";
+import { isNull } from "drizzle-orm";
 import crypto from "node:crypto";
 import { logger } from "./logger";
 
 function hashPassword(password: string): string {
   return crypto.createHash("sha256").update(password + (process.env.SESSION_SECRET ?? "dev-secret")).digest("hex");
+}
+
+export async function ensureDefaultTenant(): Promise<void> {
+  const existingTenants = await db.select().from(tenantsTable);
+  let tenantId: number;
+
+  if (existingTenants.length === 0) {
+    const [tenant] = await db.insert(tenantsTable).values({
+      name: "Default",
+      slug: "default",
+    }).returning();
+    tenantId = tenant!.id;
+    logger.info({ tenantId }, "Created default tenant");
+  } else {
+    tenantId = existingTenants[0]!.id;
+  }
+
+  const tables = [
+    { name: "users", table: usersTable },
+    { name: "channels", table: channelsTable },
+    { name: "assets", table: assetsTable },
+    { name: "playlists", table: playlistsTable },
+    { name: "live_inputs", table: liveInputsTable },
+    { name: "destinations", table: destinationsTable },
+    { name: "audit_logs", table: auditLogsTable },
+    { name: "stream_sessions", table: streamSessionsTable },
+    { name: "notification_prefs", table: notificationPrefsTable },
+    { name: "invites", table: invitesTable },
+  ] as const;
+
+  let totalUpdated = 0;
+  for (const { name, table } of tables) {
+    try {
+      const rows = await db.select({ id: (table as any).id }).from(table).where(isNull((table as any).tenantId));
+      if (rows.length > 0) {
+        await db.update(table).set({ tenantId } as any).where(isNull((table as any).tenantId));
+        totalUpdated += rows.length;
+        logger.info({ table: name, count: rows.length }, "Backfilled tenant_id");
+      }
+    } catch {
+    }
+  }
+
+  try {
+    const { youtubeAccountsTable, youtubeBroadcastsTable } = await import("@workspace/db");
+    if (youtubeAccountsTable) {
+      const rows = await db.select({ id: youtubeAccountsTable.id }).from(youtubeAccountsTable).where(isNull(youtubeAccountsTable.tenantId));
+      if (rows.length > 0) {
+        await db.update(youtubeAccountsTable).set({ tenantId } as any).where(isNull(youtubeAccountsTable.tenantId));
+        totalUpdated += rows.length;
+      }
+    }
+    if (youtubeBroadcastsTable) {
+      const rows = await db.select({ id: youtubeBroadcastsTable.id }).from(youtubeBroadcastsTable).where(isNull(youtubeBroadcastsTable.tenantId));
+      if (rows.length > 0) {
+        await db.update(youtubeBroadcastsTable).set({ tenantId } as any).where(isNull(youtubeBroadcastsTable.tenantId));
+        totalUpdated += rows.length;
+      }
+    }
+  } catch {
+  }
+
+  if (totalUpdated > 0) {
+    logger.info({ totalUpdated, tenantId }, "Tenant data migration complete");
+  }
 }
 
 export async function seedIfEmpty(): Promise<void> {
@@ -20,17 +91,8 @@ export async function seedIfEmpty(): Promise<void> {
 
   logger.info("Seeding initial data...");
 
-  const existingTenants = await db.select().from(tenantsTable);
-  let tenantId: number;
-  if (existingTenants.length === 0) {
-    const [tenant] = await db.insert(tenantsTable).values({
-      name: "Default",
-      slug: "default",
-    }).returning();
-    tenantId = tenant!.id;
-  } else {
-    tenantId = existingTenants[0]!.id;
-  }
+  const tenants = await db.select().from(tenantsTable);
+  const tenantId = tenants[0]!.id;
 
   const [admin] = await db.insert(usersTable).values({
     username: "admin",

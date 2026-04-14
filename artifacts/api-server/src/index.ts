@@ -2,6 +2,7 @@ import app from "./app";
 import { logger } from "./lib/logger";
 import { startScheduler } from "./lib/scheduler";
 import { cleanupStaleJobs } from "./lib/jobCleanup";
+import { ensureDefaultTenant, seedIfEmpty } from "./lib/seed";
 
 const rawPort = process.env["PORT"];
 
@@ -17,13 +18,24 @@ if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
-app.listen(port, async (err) => {
-  if (err) {
-    logger.error({ err }, "Error listening on port");
-    process.exit(1);
+async function start() {
+  try {
+    await ensureDefaultTenant();
+    await seedIfEmpty();
+  } catch (err) {
+    logger.error({ err }, "Startup migration/seed failed");
   }
 
-  logger.info({ port }, "Server listening");
-  await cleanupStaleJobs();
-  startScheduler();
-});
+  app.listen(port, async (err) => {
+    if (err) {
+      logger.error({ err }, "Error listening on port");
+      process.exit(1);
+    }
+
+    logger.info({ port }, "Server listening");
+    await cleanupStaleJobs();
+    startScheduler();
+  });
+}
+
+start();
