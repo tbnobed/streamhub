@@ -13,7 +13,6 @@ COPY artifacts/api-server/package.json artifacts/api-server/
 COPY artifacts/social-playout/package.json artifacts/social-playout/
 COPY artifacts/mockup-sandbox/package.json artifacts/mockup-sandbox/
 COPY worker/package.json worker/
-COPY scripts/package.json scripts/
 RUN pnpm install --frozen-lockfile
 
 FROM deps AS source
