@@ -40,6 +40,25 @@ router.post("/users", requireAuth, requireAdmin, async (req, res): Promise<void>
   }
 
   const { username, email, password, role } = parsed.data;
+
+  const [existingUsername] = await db
+    .select({ id: usersTable.id })
+    .from(usersTable)
+    .where(eq(usersTable.username, username));
+  if (existingUsername) {
+    res.status(409).json({ error: "Username already taken" });
+    return;
+  }
+
+  const [existingEmail] = await db
+    .select({ id: usersTable.id })
+    .from(usersTable)
+    .where(eq(usersTable.email, email));
+  if (existingEmail) {
+    res.status(409).json({ error: "Email already in use" });
+    return;
+  }
+
   const passwordHash = hashPassword(password);
 
   const [user] = await db
