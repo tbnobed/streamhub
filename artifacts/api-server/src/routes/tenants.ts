@@ -2,7 +2,7 @@ import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { tenantsTable, usersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
-import { requireAuth, requireAdmin, getTenantId } from "../lib/authMiddleware";
+import { requireAuth, requireAdmin, requireSuperAdmin, getTenantId } from "../lib/authMiddleware";
 import { hashPassword } from "./auth";
 
 const router: IRouter = Router();
@@ -19,7 +19,7 @@ router.get("/tenants/current", requireAuth, async (req, res): Promise<void> => {
   res.json(tenant);
 });
 
-router.patch("/tenants/current", requireAuth, requireAdmin, async (req, res): Promise<void> => {
+router.patch("/tenants/current", requireAuth, requireSuperAdmin, async (req, res): Promise<void> => {
   const tenantId = getTenantId(req);
 
   const { name, slug, settings } = req.body;
@@ -47,7 +47,7 @@ router.patch("/tenants/current", requireAuth, requireAdmin, async (req, res): Pr
   res.json(tenant);
 });
 
-router.get("/tenants", requireAuth, requireAdmin, async (_req, res): Promise<void> => {
+router.get("/tenants", requireAuth, requireSuperAdmin, async (_req, res): Promise<void> => {
   const tenants = await db.select().from(tenantsTable).orderBy(tenantsTable.id);
 
   const tenantsWithCounts = await Promise.all(
@@ -63,7 +63,7 @@ router.get("/tenants", requireAuth, requireAdmin, async (_req, res): Promise<voi
   res.json(tenantsWithCounts);
 });
 
-router.post("/tenants", requireAuth, requireAdmin, async (req, res): Promise<void> => {
+router.post("/tenants", requireAuth, requireSuperAdmin, async (req, res): Promise<void> => {
   const { name, slug, adminUsername, adminEmail, adminPassword } = req.body;
 
   if (!name?.trim() || !slug?.trim()) {
@@ -120,7 +120,7 @@ router.post("/tenants", requireAuth, requireAdmin, async (req, res): Promise<voi
   res.status(201).json(tenant);
 });
 
-router.patch("/tenants/:id", requireAuth, requireAdmin, async (req, res): Promise<void> => {
+router.patch("/tenants/:id", requireAuth, requireSuperAdmin, async (req, res): Promise<void> => {
   const tenantId = Number(req.params.id);
   if (isNaN(tenantId)) {
     res.status(400).json({ error: "Invalid tenant ID" });
@@ -163,7 +163,7 @@ router.patch("/tenants/:id", requireAuth, requireAdmin, async (req, res): Promis
   res.json(tenant);
 });
 
-router.get("/tenants/:id/users", requireAuth, requireAdmin, async (req, res): Promise<void> => {
+router.get("/tenants/:id/users", requireAuth, requireSuperAdmin, async (req, res): Promise<void> => {
   const tenantId = Number(req.params.id);
   if (isNaN(tenantId)) {
     res.status(400).json({ error: "Invalid tenant ID" });
@@ -187,7 +187,7 @@ router.get("/tenants/:id/users", requireAuth, requireAdmin, async (req, res): Pr
   res.json(users);
 });
 
-router.patch("/tenants/:id/users/:userId", requireAuth, requireAdmin, async (req, res): Promise<void> => {
+router.patch("/tenants/:id/users/:userId", requireAuth, requireSuperAdmin, async (req, res): Promise<void> => {
   const tenantId = Number(req.params.id);
   const userId = Number(req.params.userId);
   if (isNaN(tenantId) || isNaN(userId)) {

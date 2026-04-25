@@ -23,17 +23,17 @@ import { cn } from "@/lib/utils";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const NAV_ITEMS = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, adminOnly: false },
-  { href: "/channels", label: "Channels", icon: Tv2, adminOnly: false },
-  { href: "/assets", label: "Assets", icon: Film, adminOnly: false },
-  { href: "/playlists", label: "Playlists", icon: ListVideo, adminOnly: false },
-  { href: "/live-inputs", label: "Live Inputs", icon: Radio, adminOnly: false },
-  { href: "/destinations", label: "Destinations", icon: Share2, adminOnly: false },
-  { href: "/notifications", label: "Notifications", icon: Bell, adminOnly: false },
-  { href: "/workers", label: "Workers", icon: ServerCog, adminOnly: true },
-  { href: "/users", label: "Users", icon: Users, adminOnly: true },
-  { href: "/logs", label: "Audit Logs", icon: ScrollText, adminOnly: true },
-  { href: "/settings", label: "Tenant Settings", icon: Settings, adminOnly: true },
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, adminOnly: false, superAdminOnly: false },
+  { href: "/channels", label: "Channels", icon: Tv2, adminOnly: false, superAdminOnly: false },
+  { href: "/assets", label: "Assets", icon: Film, adminOnly: false, superAdminOnly: false },
+  { href: "/playlists", label: "Playlists", icon: ListVideo, adminOnly: false, superAdminOnly: false },
+  { href: "/live-inputs", label: "Live Inputs", icon: Radio, adminOnly: false, superAdminOnly: false },
+  { href: "/destinations", label: "Destinations", icon: Share2, adminOnly: false, superAdminOnly: false },
+  { href: "/notifications", label: "Notifications", icon: Bell, adminOnly: false, superAdminOnly: false },
+  { href: "/workers", label: "Workers", icon: ServerCog, adminOnly: true, superAdminOnly: false },
+  { href: "/users", label: "Users", icon: Users, adminOnly: true, superAdminOnly: false },
+  { href: "/logs", label: "Audit Logs", icon: ScrollText, adminOnly: true, superAdminOnly: false },
+  { href: "/settings", label: "Tenant Settings", icon: Settings, adminOnly: true, superAdminOnly: true },
 ];
 
 interface AppShellProps {
@@ -90,7 +90,11 @@ export function AppShell({ children }: AppShellProps) {
 
         {/* Nav */}
         <nav className="flex-1 overflow-y-auto py-4 px-3">
-          {NAV_ITEMS.filter(item => !item.adminOnly || user?.role === "admin").map(({ href, label, icon: Icon }) => {
+          {NAV_ITEMS.filter(item => {
+            if (item.superAdminOnly) return user?.isSuperAdmin === true;
+            if (item.adminOnly) return user?.role === "admin";
+            return true;
+          }).map(({ href, label, icon: Icon }) => {
             const active = location === href || (href !== "/dashboard" && location.startsWith(href));
             return (
               <Link key={href} href={href}>

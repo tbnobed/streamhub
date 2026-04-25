@@ -12,7 +12,7 @@ import {
   notificationPrefsTable,
   invitesTable,
 } from "@workspace/db";
-import { isNull } from "drizzle-orm";
+import { isNull, eq } from "drizzle-orm";
 import crypto from "node:crypto";
 import { logger } from "./logger";
 
@@ -83,6 +83,19 @@ export async function ensureDefaultTenant(): Promise<void> {
   if (totalUpdated > 0) {
     logger.info({ totalUpdated, tenantId }, "Tenant data migration complete");
   }
+
+  try {
+    const existingSupers = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.isSuperAdmin, true));
+    if (existingSupers.length === 0) {
+      const [adminUser] = await db.select().from(usersTable).where(eq(usersTable.username, "admin"));
+      if (adminUser) {
+        await db.update(usersTable).set({ isSuperAdmin: true }).where(eq(usersTable.id, adminUser.id));
+        logger.info({ userId: adminUser.id }, "Promoted default admin to super admin");
+      }
+    }
+  } catch (err) {
+    logger.warn({ err }, "Failed to ensure super admin");
+  }
 }
 
 export async function seedIfEmpty(): Promise<void> {
@@ -100,6 +113,7 @@ export async function seedIfEmpty(): Promise<void> {
     passwordHash: hashPassword("admin123"),
     role: "admin",
     isActive: true,
+    isSuperAdmin: true,
     tenantId,
   }).returning();
 

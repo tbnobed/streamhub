@@ -12,6 +12,7 @@ declare global {
         username: string;
         role: string;
         tenantId: number | null;
+        isSuperAdmin: boolean;
       };
     }
   }
@@ -36,6 +37,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     username: usersTable.username,
     role: usersTable.role,
     isActive: usersTable.isActive,
+    isSuperAdmin: usersTable.isSuperAdmin,
     tenantId: usersTable.tenantId,
   }).from(usersTable).where(eq(usersTable.id, userId));
 
@@ -44,13 +46,27 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     return;
   }
 
-  req.user = { id: user.id, username: user.username, role: user.role, tenantId: user.tenantId };
+  req.user = {
+    id: user.id,
+    username: user.username,
+    role: user.role,
+    tenantId: user.tenantId,
+    isSuperAdmin: user.isSuperAdmin,
+  };
   next();
 }
 
 export function requireAdmin(req: Request, res: Response, next: NextFunction): void {
   if (req.user?.role !== "admin") {
     res.status(403).json({ error: "Admin access required" });
+    return;
+  }
+  next();
+}
+
+export function requireSuperAdmin(req: Request, res: Response, next: NextFunction): void {
+  if (!req.user?.isSuperAdmin) {
+    res.status(403).json({ error: "Super admin access required" });
     return;
   }
   next();

@@ -7,6 +7,7 @@ interface User {
   username: string;
   email: string;
   role: string;
+  isSuperAdmin?: boolean;
   timezone: string;
   displayName?: string | null;
   tenantId?: number | null;

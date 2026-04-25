@@ -40,6 +40,14 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function SuperAdminRoute({ children }: { children: React.ReactNode }) {
+  const { user, isLoading } = useAuth();
+  if (isLoading) return null;
+  if (!user) return <Redirect to="/login" />;
+  if (!user.isSuperAdmin) return <Redirect to="/dashboard" />;
+  return <>{children}</>;
+}
+
 function Router() {
   return (
     <Switch>
@@ -87,7 +95,7 @@ function Router() {
         {() => <ProtectedRoute><InvitesPage /></ProtectedRoute>}
       </Route>
       <Route path="/settings">
-        {() => <AdminRoute><TenantSettingsPage /></AdminRoute>}
+        {() => <SuperAdminRoute><TenantSettingsPage /></SuperAdminRoute>}
       </Route>
       <Route path="/setup-account" component={SetupAccountPage} />
       <Route component={NotFound} />
