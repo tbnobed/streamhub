@@ -59,6 +59,9 @@ INSERT INTO tenants (name, slug) VALUES ('Default', 'default')
 ON CONFLICT DO NOTHING;
 
 -- Get the default tenant ID
+-- Ensure is_super_admin column exists on users (in case drizzle-kit push didn't run)
+ALTER TABLE users ADD COLUMN IF NOT EXISTS is_super_admin BOOLEAN NOT NULL DEFAULT FALSE;
+
 DO $$
 DECLARE
   tid INT;
@@ -86,6 +89,12 @@ BEGIN
     EXECUTE format('UPDATE youtube_broadcasts SET tenant_id = %s WHERE tenant_id IS NULL', tid);
   EXCEPTION WHEN undefined_table THEN NULL;
   END;
+
+  -- Promote default 'admin' user to super admin if no super admin exists yet
+  IF NOT EXISTS (SELECT 1 FROM users WHERE is_super_admin = TRUE) THEN
+    UPDATE users SET is_super_admin = TRUE WHERE username = 'admin';
+    RAISE NOTICE 'Promoted default admin user to super admin';
+  END IF;
 
   RAISE NOTICE 'Tenant data migration complete — default tenant ID: %', tid;
 END $$;
