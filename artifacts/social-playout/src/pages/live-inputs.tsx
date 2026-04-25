@@ -420,16 +420,31 @@ export default function LiveInputsPage() {
                       </div>
                       {input.ingestUrl && (
                         <div className="mt-3 space-y-1">
-                          <div className="text-xs text-muted-foreground">Server URL</div>
-                          <div className="flex items-center gap-2 bg-muted rounded px-2 py-1">
-                            <code className="text-xs flex-1 truncate">{input.ingestUrl.replace(/\/[^/]+$/, "")}</code>
-                            <CopyButton text={input.ingestUrl.replace(/\/[^/]+$/, "")} />
-                          </div>
-                          <div className="text-xs text-muted-foreground mt-1">Stream Key</div>
-                          <div className="flex items-center gap-2 bg-muted rounded px-2 py-1">
-                            <code className="text-xs flex-1 font-mono">{input.streamKey}</code>
-                            <CopyButton text={input.streamKey} />
-                          </div>
+                          {input.protocol === "srt" ? (
+                            <>
+                              <div className="text-xs text-muted-foreground">SRT URL</div>
+                              <div className="flex items-center gap-2 bg-muted rounded px-2 py-1">
+                                <code className="text-xs flex-1 truncate font-mono">{input.ingestUrl}</code>
+                                <CopyButton text={input.ingestUrl} />
+                              </div>
+                              <p className="text-[11px] text-muted-foreground/70 mt-1">
+                                Use this full URL as-is in OBS / your encoder (SRS requires the streamid in the URL).
+                              </p>
+                            </>
+                          ) : (
+                            <>
+                              <div className="text-xs text-muted-foreground">Server URL</div>
+                              <div className="flex items-center gap-2 bg-muted rounded px-2 py-1">
+                                <code className="text-xs flex-1 truncate">{input.ingestUrl.replace(/\/[^/]+$/, "")}</code>
+                                <CopyButton text={input.ingestUrl.replace(/\/[^/]+$/, "")} />
+                              </div>
+                              <div className="text-xs text-muted-foreground mt-1">Stream Key</div>
+                              <div className="flex items-center gap-2 bg-muted rounded px-2 py-1">
+                                <code className="text-xs flex-1 font-mono">{input.streamKey}</code>
+                                <CopyButton text={input.streamKey} />
+                              </div>
+                            </>
+                          )}
                         </div>
                       )}
                       {srsStatus?.srs && <StreamDetails srs={srsStatus.srs} />}
