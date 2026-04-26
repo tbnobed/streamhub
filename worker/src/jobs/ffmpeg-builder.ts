@@ -40,46 +40,17 @@ export interface FallbackSlateOptions {
   destinations: DestinationConfig[];
 }
 
-/**
- * Normalize an SRT URL so FFmpeg's URL parser handles it correctly.
- *
- * Many SRT services (SRS, JWP Live, etc.) use streamid values like
- * `#!::r=live/streamname,m=publish`. The leading `#` is interpreted as a URI
- * fragment delimiter by FFmpeg's parser, so the streamid silently becomes
- * empty and the connection fails with "Input/output error".
- *
- * This re-encodes each query parameter value (handling both already-encoded
- * and raw inputs) so special characters like `#`, `:`, `=`, `,` are escaped
- * and the streamid survives intact.
- */
-function normalizeSrtUrl(rawUrl: string): string {
-  const qIdx = rawUrl.indexOf("?");
-  if (qIdx === -1) return rawUrl;
-  const base = rawUrl.slice(0, qIdx);
-  const query = rawUrl.slice(qIdx + 1);
-  const reencoded = query
-    .split("&")
-    .map((pair) => {
-      const eq = pair.indexOf("=");
-      if (eq === -1) return pair;
-      const key = pair.slice(0, eq);
-      let value = pair.slice(eq + 1);
-      try {
-        value = decodeURIComponent(value);
-      } catch {
-        /* leave as-is if not valid percent-encoding */
-      }
-      return `${key}=${encodeURIComponent(value)}`;
-    })
-    .join("&");
-  return `${base}?${reencoded}`;
-}
-
 function buildOutputArgs(destinations: DestinationConfig[], mode: "copy" | "reencode" = "copy"): string[] {
   return destinations.flatMap((dest) => {
     const args = ["-map", "0:v:0?", "-map", "0:a:0?"];
     if (dest.platform === "srt") {
-      const srtUrl = normalizeSrtUrl(dest.streamUrl);
+      // Pass the user-provided SRT URL through to FFmpeg as-is. libsrt
+      // forwards the streamid value verbatim during the SRT handshake, so any
+      // percent-encoding here would be sent literally to the server (e.g. SRS
+      // / JWP Live) and rejected. FFmpeg's URL parser correctly preserves the
+      // streamid value (including a leading `#`) when it appears inside a
+      // query string after `?`.
+      const srtUrl = dest.streamUrl;
       if (mode === "reencode") {
         args.push(
           "-c:v", "libx264", "-preset", "veryfast",

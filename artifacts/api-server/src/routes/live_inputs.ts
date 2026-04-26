@@ -24,10 +24,10 @@ function buildIngestUrl(protocol: string, streamKey: string): string {
   const host = process.env.INGEST_HOST ?? "ingest.yourdomain.com";
   if (protocol === "srt") {
     const srtPort = process.env.SRT_INGEST_PORT ?? "10080";
-    // The streamid value is URL-encoded so encoders/parsers don't treat the
-    // leading `#` as a URI fragment delimiter (which silently drops the rest).
-    const streamid = encodeURIComponent(`#!::r=live/${streamKey},m=publish`);
-    return `srt://${host}:${srtPort}?streamid=${streamid}`;
+    // SRS / OBS / FFmpeg all expect the streamid value verbatim during the
+    // SRT handshake — percent-encoding it would be sent literally to SRS and
+    // rejected. Keep `#!::r=...,m=publish` raw.
+    return `srt://${host}:${srtPort}?streamid=#!::r=live/${streamKey},m=publish`;
   }
   return `rtmp://${host}/live/${streamKey}`;
 }
